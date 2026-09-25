@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: pethub-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: pethub
+    ports:
+      - '5432:5432'
+    volumes:
+      - pethub_postgres_data:/var/lib/postgresql/data
+    networks:
+      - pethub-net
+
+volumes:
+  pethub_postgres_data:
+    driver: local
+
+networks:
+  pethub_net:
+    driver: bridge

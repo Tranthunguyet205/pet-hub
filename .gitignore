@@ -1,4 +1,21 @@
+# Existing ignores
 .claude
 .agent
+docs
 
+# Compiled output
+/dist
+/node_modules
 
+# Environment
+.env
+.env.local
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS
+.DS_Store
+Thumbs.db

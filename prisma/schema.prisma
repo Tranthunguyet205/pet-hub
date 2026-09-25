@@ -1,0 +1,229 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ==========================================
+// 1. USER & AUTHENTICATION
+// ==========================================
+
+model User {
+  id           Int        @id @default(autoincrement())
+  email        String     @unique
+  passwordHash String
+  fullName     String
+  phoneNumber  String?    @unique
+  avatarUrl    String?
+  role         Role       @default(OWNER)
+  status       UserStatus @default(ACTIVE)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  // Relations
+  pets             Pet[]
+  customerBookings Booking[] @relation("CustomerBookings")
+  assignedBookings Booking[] @relation("StaffBookings")
+}
+
+// ==========================================
+// 2. PET MANAGEMENT
+// ==========================================
+
+model Pet {
+  id           Int       @id @default(autoincrement())
+  userId       Int
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  name         String
+  species      String // Người dùng tự nhập (ví dụ: Chó, Mèo...)
+  breed        String? // Người dùng tự nhập (ví dụ: Golden Retriever, Poodle...)
+  gender       PetGender @default(UNKNOWN)
+  birthDate    DateTime?
+  weight       Float
+  avatarUrl    String?
+  allergyNotes String?
+  specialNotes String?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  // Relations
+  bookings Booking[]
+
+  @@index([userId])
+}
+
+// ==========================================
+// 3. GROOMING SERVICES
+// ==========================================
+
+model GroomingService {
+  id              Int                     @id @default(autoincrement())
+  category        GroomingServiceCategory
+  name            String
+  description     String?
+  durationMinutes Int
+  basePrice       Decimal                 @db.Decimal(12, 2)
+  imageUrl        String?
+  isActive        Boolean                 @default(true)
+  createdAt       DateTime                @default(now())
+  updatedAt       DateTime                @updatedAt
+
+  // Relations
+  bookingServices BookingGroomingService[]
+}
+
+// ==========================================
+// 4. BOOKING MANAGEMENT
+// ==========================================
+
+model Booking {
+  id          Int           @id @default(autoincrement())
+  userId      Int
+  user        User          @relation("CustomerBookings", fields: [userId], references: [id])
+  petId       Int
+  pet         Pet           @relation(fields: [petId], references: [id])
+  staffId     Int?
+  staff       User?         @relation("StaffBookings", fields: [staffId], references: [id])
+  bookingType BookingType
+  status      BookingStatus @default(PENDING)
+
+  // Grooming fields
+  expectedBookingDate DateTime?
+  groomingStep        GroomingServiceCategory?
+
+  // Boarding fields
+  expectedCheckInDate  DateTime?
+  expectedCheckOutDate DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  groomingServices    BookingGroomingService[]
+  bookingBoardingRoom BookingBoardingRoom?
+  logs                BookingLog[]
+
+  @@index([userId])
+  @@index([staffId])
+  @@index([expectedBookingDate, status])
+}
+
+model BookingGroomingService {
+  id                Int             @id @default(autoincrement())
+  bookingId         Int
+  booking           Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  groomingServiceId Int
+  groomingService   GroomingService @relation(fields: [groomingServiceId], references: [id])
+  price             Decimal         @db.Decimal(12, 2)
+  durationMinutes   Int
+
+  @@index([bookingId])
+}
+
+model BookingBoardingRoom {
+  id             Int          @id @default(autoincrement())
+  bookingId      Int          @unique
+  booking        Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  boardingRoomId Int
+  boardingRoom   BoardingRoom @relation(fields: [boardingRoomId], references: [id])
+  price          Decimal      @db.Decimal(12, 2)
+
+  @@index([boardingRoomId])
+}
+
+// ==========================================
+// 5. BOOKING LOG (SHADOW TABLE FOR TRIGGER)
+// ==========================================
+
+model BookingLog {
+  id        Int     @id @default(autoincrement())
+  bookingId Int
+  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+
+  // Mirroring fields of Booking
+  userId               Int
+  petId                Int
+  staffId              Int?
+  bookingType          BookingType
+  status               BookingStatus
+  expectedBookingDate  DateTime?
+  groomingStep         GroomingServiceCategory?
+  expectedCheckInDate  DateTime?
+  expectedCheckOutDate DateTime?
+
+  // Audit metadata for Trigger
+  action    String // "INSERT", "UPDATE", "DELETE"
+  changedAt DateTime @default(now())
+
+  @@index([bookingId, changedAt])
+}
+
+// ==========================================
+// 6. BOARDING ROOM MANAGEMENT
+// ==========================================
+
+model BoardingRoom {
+  id            Int        @id @default(autoincrement())
+  name          String     @unique // Tên phòng/chuồng (ví dụ: "Phòng VIP 01", "Chuồng Standard 02")
+  description   String?
+  pricePerNight Decimal    @db.Decimal(12, 2)
+  status        RoomStatus @default(AVAILABLE)
+
+  // Relations
+  bookingBoardingRooms BookingBoardingRoom[]
+}
+
+// ==========================================
+// 7. ENUMS
+// ==========================================
+
+enum Role {
+  ADMIN
+  STAFF
+  OWNER
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+  BANNED
+}
+
+enum PetGender {
+  MALE
+  FEMALE
+  UNKNOWN
+}
+
+enum GroomingServiceCategory {
+  BATH_AND_DRY
+  HAIRCUT
+  HYGIENE
+  FULL_GROOMING
+  OTHER
+}
+
+enum BookingType {
+  GROOMING
+  BOARDING
+}
+
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  CHECKED_IN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  NO_SHOW
+}
+
+enum RoomStatus {
+  AVAILABLE
+  OCCUPIED
+  MAINTENANCE
+}
