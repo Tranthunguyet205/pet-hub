@@ -1,6 +1,7 @@
 # Existing ignores
 .claude
 .agent
+files
 docs
 
 # Compiled output

@@ -20,6 +20,7 @@ model User {
   avatarUrl    String?
   role         Role       @default(OWNER)
   status       UserStatus @default(ACTIVE)
+  isDelete     Boolean    @default(false)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
@@ -47,6 +48,7 @@ model Pet {
   allergyNotes String?
   specialNotes String?
   isActive     Boolean   @default(true)
+  isDelete     Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 
@@ -69,6 +71,7 @@ model GroomingService {
   basePrice       Decimal                 @db.Decimal(12, 2)
   imageUrl        String?
   isActive        Boolean                 @default(true)
+  isDelete        Boolean                 @default(false)
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
 
@@ -99,6 +102,7 @@ model Booking {
   expectedCheckInDate  DateTime?
   expectedCheckOutDate DateTime?
 
+  isDelete  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -154,6 +158,7 @@ model BookingLog {
   groomingStep         GroomingServiceCategory?
   expectedCheckInDate  DateTime?
   expectedCheckOutDate DateTime?
+  isDelete             Boolean                  @default(false)
 
   // Audit metadata for Trigger
   action    String // "INSERT", "UPDATE", "DELETE"
@@ -172,6 +177,7 @@ model BoardingRoom {
   description   String?
   pricePerNight Decimal    @db.Decimal(12, 2)
   status        RoomStatus @default(AVAILABLE)
+  isDelete      Boolean    @default(false)
 
   // Relations
   bookingBoardingRooms BookingBoardingRoom[]
