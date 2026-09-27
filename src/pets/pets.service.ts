@@ -8,11 +8,34 @@ import { CreatePetDto } from './dto/create-pet.dto';
 import { UpdatePetDto } from './dto/update-pet.dto';
 import { QueryPetDto } from './dto/query-pet.dto';
 import { Role, Prisma, PetGender } from '@prisma/client';
-import { formatPetAvatar } from '../common/utils/image-url.util';
+import { toPublicImageUrl } from '../common/utils/image-url.util';
 
 @Injectable()
 export class PetsService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Helper format avatarUrl cho pet object (kèm relation user nếu có)
+   */
+  private formatPetAvatar<
+    T extends { avatarUrl?: string | null; user?: any },
+  >(pet: T): T {
+    if (!pet) return pet;
+    return {
+      ...pet,
+      avatarUrl: toPublicImageUrl(pet.avatarUrl),
+      ...(pet.user
+        ? {
+            user: {
+              ...pet.user,
+              ...(pet.user.avatarUrl !== undefined
+                ? { avatarUrl: toPublicImageUrl(pet.user.avatarUrl) }
+                : {}),
+            },
+          }
+        : {}),
+    };
+  }
 
   /**
    * Tạo thú cưng mới
@@ -65,7 +88,7 @@ export class PetsService {
       },
     });
 
-    return formatPetAvatar(pet);
+    return this.formatPetAvatar(pet);
   }
 
   /**
@@ -90,7 +113,7 @@ export class PetsService {
       },
     });
 
-    return pets.map((pet) => formatPetAvatar(pet));
+    return pets.map((pet) => this.formatPetAvatar(pet));
   }
 
   /**
@@ -162,7 +185,7 @@ export class PetsService {
     ]);
 
     return {
-      data: data.map((pet) => formatPetAvatar(pet)),
+      data: data.map((pet) => this.formatPetAvatar(pet)),
       meta: {
         total,
         page,
@@ -206,7 +229,7 @@ export class PetsService {
       );
     }
 
-    return formatPetAvatar(pet);
+    return this.formatPetAvatar(pet);
   }
 
   /**
@@ -280,7 +303,7 @@ export class PetsService {
       },
     });
 
-    return formatPetAvatar(updatedPet);
+    return this.formatPetAvatar(updatedPet);
   }
 
   /**

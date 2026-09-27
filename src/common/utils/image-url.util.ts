@@ -47,31 +47,3 @@ export function toPublicImageUrl(
 
   return `${baseUrl}/public-images${formattedRelativePath}`;
 }
-
-/**
- * Format avatarUrl cho User object
- */
-export function formatUserAvatar<T extends { avatarUrl?: string | null }>(
-  user: T,
-  appUrl?: string,
-): T {
-  if (!user) return user;
-  return {
-    ...user,
-    avatarUrl: toPublicImageUrl(user.avatarUrl, appUrl),
-  };
-}
-
-/**
- * Format avatarUrl cho Pet object (kèm relation user nếu có)
- */
-export function formatPetAvatar<
-  T extends { avatarUrl?: string | null; user?: any },
->(pet: T, appUrl?: string): T {
-  if (!pet) return pet;
-  return {
-    ...pet,
-    avatarUrl: toPublicImageUrl(pet.avatarUrl, appUrl),
-    ...(pet.user ? { user: formatUserAvatar(pet.user, appUrl) } : {}),
-  };
-}

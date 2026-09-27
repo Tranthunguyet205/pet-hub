@@ -12,11 +12,22 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { Role, Prisma } from '@prisma/client';
-import { formatUserAvatar } from '../common/utils/image-url.util';
+import { toPublicImageUrl } from '../common/utils/image-url.util';
 
 @Injectable()
 export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
+
+  /**
+   * Helper format avatarUrl cho user object
+   */
+  private formatUserAvatar<T extends { avatarUrl?: string | null }>(user: T): T {
+    if (!user) return user;
+    return {
+      ...user,
+      avatarUrl: toPublicImageUrl(user.avatarUrl),
+    };
+  }
 
   /**
    * Tạo người dùng mới (Dành cho ADMIN)
@@ -67,7 +78,7 @@ export class UsersService {
     });
 
     const { passwordHash: _, ...safeUser } = user;
-    return formatUserAvatar(safeUser);
+    return this.formatUserAvatar(safeUser);
   }
 
   /**
@@ -116,7 +127,7 @@ export class UsersService {
     ]);
 
     return {
-      data: data.map((user) => formatUserAvatar(user)),
+      data: data.map((user) => this.formatUserAvatar(user)),
       meta: {
         total,
         page,
@@ -142,7 +153,7 @@ export class UsersService {
     }
 
     const { passwordHash: _, ...safeUser } = user;
-    return formatUserAvatar(safeUser);
+    return this.formatUserAvatar(safeUser);
   }
 
   /**
@@ -190,7 +201,7 @@ export class UsersService {
     });
 
     const { passwordHash: _, ...safeUser } = updatedUser;
-    return formatUserAvatar(safeUser);
+    return this.formatUserAvatar(safeUser);
   }
 
   /**
@@ -209,7 +220,7 @@ export class UsersService {
     }
 
     const { passwordHash: _, ...safeUser } = user;
-    return formatUserAvatar(safeUser);
+    return this.formatUserAvatar(safeUser);
   }
 
   /**
@@ -258,7 +269,7 @@ export class UsersService {
     });
 
     const { passwordHash: _, ...safeUser } = updatedUser;
-    return formatUserAvatar(safeUser);
+    return this.formatUserAvatar(safeUser);
   }
 
   /**
