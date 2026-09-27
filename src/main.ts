@@ -2,6 +2,7 @@ import { NestFactory } from '@nestjs/core';
 import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
+import { useContainer } from 'class-validator';
 import { join } from 'path';
 import { AppModule } from './app.module';
 
@@ -9,6 +10,9 @@ async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableCors();
   app.setGlobalPrefix('api');
+
+  // Cho phép class-validator sử dụng NestJS Dependency Injection container
+  useContainer(app.select(AppModule), { fallbackOnErrors: true });
 
   // Phục vụ các tệp tĩnh tải lên từ thư mục ./files (truy cập qua http://localhost:3000/files/...)
   app.useStaticAssets(join(process.cwd(), 'files'), {
