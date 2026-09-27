@@ -8,6 +8,7 @@ import { CreatePetDto } from './dto/create-pet.dto';
 import { UpdatePetDto } from './dto/update-pet.dto';
 import { QueryPetDto } from './dto/query-pet.dto';
 import { Role, Prisma, PetGender } from '@prisma/client';
+import { formatPetAvatar } from '../common/utils/image-url.util';
 
 @Injectable()
 export class PetsService {
@@ -64,14 +65,14 @@ export class PetsService {
       },
     });
 
-    return pet;
+    return formatPetAvatar(pet);
   }
 
   /**
    * Lấy danh sách thú cưng của người dùng hiện tại (GET /api/pets/my-pets)
    */
   async getMyPets(currentUserId: number) {
-    return this.prisma.pet.findMany({
+    const pets = await this.prisma.pet.findMany({
       where: {
         userId: currentUserId,
         isDelete: false,
@@ -88,6 +89,8 @@ export class PetsService {
         },
       },
     });
+
+    return pets.map((pet) => formatPetAvatar(pet));
   }
 
   /**
@@ -159,7 +162,7 @@ export class PetsService {
     ]);
 
     return {
-      data,
+      data: data.map((pet) => formatPetAvatar(pet)),
       meta: {
         total,
         page,
@@ -203,7 +206,7 @@ export class PetsService {
       );
     }
 
-    return pet;
+    return formatPetAvatar(pet);
   }
 
   /**
@@ -277,7 +280,7 @@ export class PetsService {
       },
     });
 
-    return updatedPet;
+    return formatPetAvatar(updatedPet);
   }
 
   /**

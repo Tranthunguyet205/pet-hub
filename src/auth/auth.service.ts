@@ -10,6 +10,8 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
 
+import { toPublicImageUrl } from '../common/utils/image-url.util';
+
 export interface JwtTokenPayload {
   sub: number;
   email: string;
@@ -63,7 +65,7 @@ export class AuthService {
         email: user.email,
         fullName: user.fullName,
         phoneNumber: user.phoneNumber,
-        avatarUrl: user.avatarUrl,
+        avatarUrl: toPublicImageUrl(user.avatarUrl),
         role: user.role,
       },
     };

@@ -12,6 +12,7 @@ import { UpdateProfileDto } from './dto/update-profile.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { Role, Prisma } from '@prisma/client';
+import { formatUserAvatar } from '../common/utils/image-url.util';
 
 @Injectable()
 export class UsersService {
@@ -66,7 +67,7 @@ export class UsersService {
     });
 
     const { passwordHash: _, ...safeUser } = user;
-    return safeUser;
+    return formatUserAvatar(safeUser);
   }
 
   /**
@@ -115,7 +116,7 @@ export class UsersService {
     ]);
 
     return {
-      data,
+      data: data.map((user) => formatUserAvatar(user)),
       meta: {
         total,
         page,
@@ -141,7 +142,7 @@ export class UsersService {
     }
 
     const { passwordHash: _, ...safeUser } = user;
-    return safeUser;
+    return formatUserAvatar(safeUser);
   }
 
   /**
@@ -189,7 +190,7 @@ export class UsersService {
     });
 
     const { passwordHash: _, ...safeUser } = updatedUser;
-    return safeUser;
+    return formatUserAvatar(safeUser);
   }
 
   /**
@@ -208,7 +209,7 @@ export class UsersService {
     }
 
     const { passwordHash: _, ...safeUser } = user;
-    return safeUser;
+    return formatUserAvatar(safeUser);
   }
 
   /**
@@ -257,7 +258,7 @@ export class UsersService {
     });
 
     const { passwordHash: _, ...safeUser } = updatedUser;
-    return safeUser;
+    return formatUserAvatar(safeUser);
   }
 
   /**
