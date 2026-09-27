@@ -9,7 +9,9 @@ import { AppModule } from './app.module';
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
   app.enableCors();
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: ['public-images/(.*)'],
+  });
 
   // Cho phép class-validator sử dụng NestJS Dependency Injection container
   useContainer(app.select(AppModule), { fallbackOnErrors: true });
