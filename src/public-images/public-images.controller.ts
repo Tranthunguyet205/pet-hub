@@ -3,49 +3,43 @@ import { ApiTags, ApiOperation, ApiParam, ApiResponse } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { PublicImagesService } from './public-images.service';
 
-@ApiTags('Public Images (Image Proxy)')
+@ApiTags('Public Images (Local Storage Stream)')
 @Controller('public-images')
 export class PublicImagesController {
   constructor(private readonly publicImagesService: PublicImagesService) {}
 
   @Get('*')
   @ApiOperation({
-    summary: 'Proxy tải và stream ảnh từ URL bên ngoài',
+    summary: 'Xem và stream file ảnh từ thư mục lưu trữ trên server',
     description:
-      'Nhận URL ảnh từ xa bất kỳ (HTTP/HTTPS), tải về và stream trực tiếp dữ liệu binary ảnh về cho trình duyệt hiển thị.',
+      'Nhận đường dẫn ảnh lưu trữ nội bộ (dạng /public-images/files/avatars/...) và stream trực tiếp dữ liệu binary ảnh về trình duyệt.',
   })
   @ApiParam({
-    name: 'url',
+    name: 'path',
     description:
-      'Đường dẫn URL ảnh từ xa (Ví dụ: http://localhost:3000/public-images/https://images.unsplash.com/photo-1543466835-00a7907e9de1?w=500)',
+      'Đường dẫn file ảnh (Ví dụ: http://localhost:3000/public-images/files/avatars/avatar-1790423610382-949662694.jfif)',
     required: true,
   })
   @ApiResponse({
     status: 200,
-    description: 'Dữ liệu stream của ảnh (image/jpeg, image/png, image/webp,...)',
+    description: 'Dữ liệu binary của ảnh (image/jpeg, image/png, image/webp,...)',
   })
   @ApiResponse({
     status: 400,
-    description: 'URL không hợp lệ hoặc thiếu tham số',
+    description: 'Đường dẫn file không hợp lệ hoặc cố ý tấn công Path Traversal',
   })
   @ApiResponse({
     status: 404,
-    description: 'Không tìm thấy ảnh tại máy chủ từ xa',
+    description: 'Không tìm thấy file ảnh trên server',
   })
-  @ApiResponse({
-    status: 502,
-    description: 'Lỗi tải ảnh từ upstream server',
-  })
-  async proxyImage(@Req() req: Request, @Res() res: Response): Promise<void> {
-    // Lấy toàn bộ path sau /public-images/ bao gồm cả query params
-    const rawUrl = req.originalUrl || req.url;
+  async streamLocalImage(@Req() req: Request, @Res() res: Response): Promise<void> {
+    // Lấy toàn bộ path sau /public-images/
+    const rawPath = req.originalUrl || req.url;
 
-    const result = await this.publicImagesService.fetchImageStream(rawUrl);
+    const result = await this.publicImagesService.getLocalImageStream(rawPath);
 
     res.setHeader('Content-Type', result.contentType);
-    if (result.contentLength) {
-      res.setHeader('Content-Length', result.contentLength);
-    }
+    res.setHeader('Content-Length', result.contentLength);
     res.setHeader('Cache-Control', 'public, max-age=86400, immutable');
 
     result.stream.pipe(res);
