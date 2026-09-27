@@ -9,7 +9,6 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma/prisma.service';
 import { LoginDto } from './dto/login.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { UserStatus } from '@prisma/client';
 
 export interface JwtTokenPayload {
   sub: number;
@@ -42,10 +41,6 @@ export class AuthService {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
     }
 
-    if (user.status !== UserStatus.ACTIVE) {
-      throw new UnauthorizedException('Tài khoản đã bị tạm khóa hoặc vô hiệu hóa');
-    }
-
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Email hoặc mật khẩu không chính xác');
@@ -70,7 +65,6 @@ export class AuthService {
         phoneNumber: user.phoneNumber,
         avatarUrl: user.avatarUrl,
         role: user.role,
-        status: user.status,
       },
     };
   }
@@ -103,7 +97,7 @@ export class AuthService {
       where: { id: payload.sub },
     });
 
-    if (!user || user.isDelete || user.status !== UserStatus.ACTIVE) {
+    if (!user || user.isDelete) {
       throw new UnauthorizedException('Tài khoản người dùng không hợp lệ hoặc đã bị vô hiệu hóa');
     }
 

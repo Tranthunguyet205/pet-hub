@@ -1,7 +1,7 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
 import { Type } from 'class-transformer';
-import { Role, UserStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 export class QueryUserDto {
   @ApiPropertyOptional({
@@ -41,12 +41,4 @@ export class QueryUserDto {
   @IsEnum(Role, { message: 'Role không hợp lệ' })
   @IsOptional()
   role?: Role;
-
-  @ApiPropertyOptional({
-    description: 'Lọc theo trạng thái tài khoản',
-    enum: UserStatus,
-  })
-  @IsEnum(UserStatus, { message: 'Status không hợp lệ' })
-  @IsOptional()
-  status?: UserStatus;
 }

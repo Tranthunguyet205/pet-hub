@@ -70,7 +70,7 @@ export class PetsController {
   @ApiOperation({
     summary: 'Lấy danh sách tất cả thú cưng trong hệ thống (Admin & Staff Only)',
     description:
-      'Hỗ trợ phân trang, tìm kiếm theo tên pet/loài/giống hoặc thông tin chủ sở hữu, và bộ lọc theo species, gender, userId, isActive.',
+      'Hỗ trợ phân trang, tìm kiếm theo tên pet/loài/giống hoặc thông tin chủ sở hữu, và bộ lọc theo species, gender, userId.',
   })
   @ApiResponse({
     status: 200,
@@ -197,7 +197,7 @@ export class PetsController {
   @ApiOperation({
     summary: 'Xóa mềm thú cưng theo ID',
     description:
-      'Chuyển isDelete = true và isActive = false. OWNER chỉ xóa được thú cưng của mình. ADMIN và STAFF có quyền xóa thú cưng của bất kỳ ai.',
+      'Chuyển isDelete = true. OWNER chỉ xóa được thú cưng của mình. ADMIN và STAFF có quyền xóa thú cưng của bất kỳ ai.',
   })
   @ApiResponse({
     status: 200,

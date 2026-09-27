@@ -11,7 +11,7 @@ import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateProfileDto } from './dto/update-profile.dto';
 import { QueryUserDto } from './dto/query-user.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
-import { Role, UserStatus, Prisma } from '@prisma/client';
+import { Role, Prisma } from '@prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -61,7 +61,6 @@ export class UsersService {
         phoneNumber: phoneNumber ? phoneNumber.trim() : null,
         role: role || Role.OWNER,
         avatarUrl,
-        status: UserStatus.ACTIVE,
         isDelete: false,
       },
     });
@@ -74,7 +73,7 @@ export class UsersService {
    * Lấy danh sách người dùng có phân trang, tìm kiếm và lọc (Dành cho ADMIN)
    */
   async findAll(query: QueryUserDto) {
-    const { page = 1, limit = 10, search, role, status } = query;
+    const { page = 1, limit = 10, search, role } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.UserWhereInput = {
@@ -83,10 +82,6 @@ export class UsersService {
 
     if (role) {
       where.role = role;
-    }
-
-    if (status) {
-      where.status = status;
     }
 
     if (search && search.trim()) {
@@ -111,7 +106,6 @@ export class UsersService {
           phoneNumber: true,
           avatarUrl: true,
           role: true,
-          status: true,
           isDelete: true,
           createdAt: true,
           updatedAt: true,
@@ -257,7 +251,6 @@ export class UsersService {
       data: {
         ...(updateUserDto.fullName && { fullName: updateUserDto.fullName.trim() }),
         ...(updateUserDto.phoneNumber && { phoneNumber: updateUserDto.phoneNumber.trim() }),
-        ...(updateUserDto.status && { status: updateUserDto.status }),
         ...(updateUserDto.role && { role: updateUserDto.role }),
         ...(avatarUrl !== undefined && { avatarUrl }),
       },
@@ -290,7 +283,6 @@ export class UsersService {
       where: { id },
       data: {
         isDelete: true,
-        status: UserStatus.INACTIVE,
       },
     });
 

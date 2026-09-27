@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsBoolean, IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { Type } from 'class-transformer';
 import { PetGender } from '@prisma/client';
 
 export class QueryPetDto {
@@ -58,17 +58,4 @@ export class QueryPetDto {
   @IsInt({ message: 'UserId phải là số nguyên' })
   @IsOptional()
   userId?: number;
-
-  @ApiPropertyOptional({
-    description: 'Lọc theo trạng thái kích hoạt (true/false)',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
-  @IsBoolean({ message: 'isActive phải là boolean' })
-  isActive?: boolean;
 }

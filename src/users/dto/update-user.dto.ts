@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { IsEnum, IsOptional, IsString } from 'class-validator';
-import { Role, UserStatus } from '@prisma/client';
+import { Role } from '@prisma/client';
 
 export class UpdateUserDto {
   @ApiPropertyOptional({
@@ -26,15 +26,6 @@ export class UpdateUserDto {
   })
   @IsOptional()
   avatar?: any;
-
-  @ApiPropertyOptional({
-    description: 'Trạng thái tài khoản',
-    enum: UserStatus,
-    example: UserStatus.ACTIVE,
-  })
-  @IsEnum(UserStatus, { message: 'Trạng thái phải là ACTIVE, INACTIVE hoặc BANNED' })
-  @IsOptional()
-  status?: UserStatus;
 
   @ApiPropertyOptional({
     description: 'Vai trò tài khoản (chỉ ADMIN có quyền sửa)',

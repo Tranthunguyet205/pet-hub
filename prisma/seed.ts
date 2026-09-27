@@ -1,4 +1,4 @@
-import { PrismaClient, Role, UserStatus } from '@prisma/client';
+import { PrismaClient, Role } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 
 const prisma = new PrismaClient();
@@ -16,7 +16,6 @@ async function main() {
     update: {
       passwordHash,
       role: Role.ADMIN,
-      status: UserStatus.ACTIVE,
       isDelete: false,
     },
     create: {
@@ -25,7 +24,6 @@ async function main() {
       fullName: 'System Administrator',
       phoneNumber: '0988888888',
       role: Role.ADMIN,
-      status: UserStatus.ACTIVE,
       isDelete: false,
     },
   });

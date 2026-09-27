@@ -19,7 +19,6 @@ model User {
   phoneNumber  String?    @unique
   avatarUrl    String?
   role         Role       @default(OWNER)
-  status       UserStatus @default(ACTIVE)
   isDelete     Boolean    @default(false)
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
@@ -47,7 +46,6 @@ model Pet {
   avatarUrl    String?
   allergyNotes String?
   specialNotes String?
-  isActive     Boolean   @default(true)
   isDelete     Boolean   @default(false)
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
@@ -70,7 +68,6 @@ model GroomingService {
   durationMinutes Int
   basePrice       Decimal                 @db.Decimal(12, 2)
   imageUrl        String?
-  isActive        Boolean                 @default(true)
   isDelete        Boolean                 @default(false)
   createdAt       DateTime                @default(now())
   updatedAt       DateTime                @updatedAt
@@ -191,12 +188,6 @@ enum Role {
   ADMIN
   STAFF
   OWNER
-}
-
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  BANNED
 }
 
 enum PetGender {

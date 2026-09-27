@@ -5,10 +5,9 @@ import {
   IsOptional,
   IsString,
   IsDateString,
-  IsBoolean,
   Min,
 } from 'class-validator';
-import { Type, Transform } from 'class-transformer';
+import { Type } from 'class-transformer';
 import { PetGender } from '@prisma/client';
 
 export class UpdatePetDto {
@@ -85,18 +84,6 @@ export class UpdatePetDto {
   specialNotes?: string;
 
 
-  @ApiPropertyOptional({
-    description: 'Trạng thái kích hoạt của thú cưng',
-    example: true,
-  })
-  @IsOptional()
-  @Transform(({ value }) => {
-    if (value === 'true' || value === true) return true;
-    if (value === 'false' || value === false) return false;
-    return value;
-  })
-  @IsBoolean({ message: 'isActive phải là kiểu boolean' })
-  isActive?: boolean;
 
   @ApiPropertyOptional({
     type: 'string',

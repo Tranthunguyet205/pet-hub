@@ -3,7 +3,6 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../../prisma/prisma.service';
-import { UserStatus } from '@prisma/client';
 
 export interface JwtPayload {
   sub: number;
@@ -29,7 +28,7 @@ export class JwtStrategy extends PassportStrategy(Strategy, 'jwt') {
       where: { id: payload.sub },
     });
 
-    if (!user || user.isDelete || user.status !== UserStatus.ACTIVE) {
+    if (!user || user.isDelete) {
       throw new UnauthorizedException('Tài khoản không tồn tại hoặc đã bị khóa');
     }
 

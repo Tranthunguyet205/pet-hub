@@ -49,7 +49,6 @@ export class PetsService {
         specialNotes: createPetDto.specialNotes
           ? createPetDto.specialNotes.trim()
           : null,
-        isActive: true,
         isDelete: false,
       },
       include: {
@@ -95,7 +94,7 @@ export class PetsService {
    * Lấy danh sách toàn bộ thú cưng có phân trang & lọc (Dành cho ADMIN & STAFF)
    */
   async findAll(query: QueryPetDto) {
-    const { page = 1, limit = 10, search, species, gender, userId, isActive } = query;
+    const { page = 1, limit = 10, search, species, gender, userId } = query;
     const skip = (page - 1) * limit;
 
     const where: Prisma.PetWhereInput = {
@@ -112,10 +111,6 @@ export class PetsService {
 
     if (userId) {
       where.userId = userId;
-    }
-
-    if (typeof isActive === 'boolean') {
-      where.isActive = isActive;
     }
 
     if (search && search.trim()) {
@@ -267,9 +262,6 @@ export class PetsService {
             ? updatePetDto.specialNotes.trim()
             : null,
         }),
-        ...(updatePetDto.isActive !== undefined && {
-          isActive: updatePetDto.isActive,
-        }),
         ...(avatarUrl !== undefined && { avatarUrl }),
       },
       include: {
@@ -289,7 +281,7 @@ export class PetsService {
   }
 
   /**
-   * Xóa mềm thú cưng theo ID (isDelete = true, isActive = false)
+   * Xóa mềm thú cưng theo ID (isDelete = true)
    * - OWNER: Chỉ xóa được thú cưng của mình
    * - ADMIN / STAFF: Xóa được thú cưng của bất kỳ ai
    */
@@ -315,7 +307,6 @@ export class PetsService {
       where: { id },
       data: {
         isDelete: true,
-        isActive: false,
       },
     });
 
