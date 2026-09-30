@@ -12,21 +12,21 @@ datasource db {
 // ==========================================
 
 model User {
-  id           Int        @id @default(autoincrement())
-  email        String     @unique
+  id           Int      @id @default(autoincrement())
+  email        String   @unique
   passwordHash String
   fullName     String
-  phoneNumber  String?    @unique
+  phoneNumber  String?  @unique
   avatarUrl    String?
-  role         Role       @default(OWNER)
-  isDelete     Boolean    @default(false)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
+  role         Role     @default(OWNER)
+  isDelete     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
 
   // Relations
   pets             Pet[]
-  customerBookings Booking[] @relation("CustomerBookings")
-  assignedBookings Booking[] @relation("StaffBookings")
+  customerBookings Booking[]        @relation("CustomerBookings")
+  assignedServices BookingService[] @relation("StaffServices")
 }
 
 // ==========================================
@@ -57,23 +57,23 @@ model Pet {
 }
 
 // ==========================================
-// 3. GROOMING SERVICES
+// 3. SERVICES
 // ==========================================
 
-model GroomingService {
-  id              Int                     @id @default(autoincrement())
-  category        GroomingServiceCategory
+model Service {
+  id              Int             @id @default(autoincrement())
+  category        ServiceCategory
   name            String
   description     String?
   durationMinutes Int
-  basePrice       Decimal                 @db.Decimal(12, 2)
+  basePrice       Int
   imageUrl        String?
-  isDelete        Boolean                 @default(false)
-  createdAt       DateTime                @default(now())
-  updatedAt       DateTime                @updatedAt
+  isDelete        Boolean         @default(false)
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
 
   // Relations
-  bookingServices BookingGroomingService[]
+  bookingServices BookingService[]
 }
 
 // ==========================================
@@ -81,21 +81,13 @@ model GroomingService {
 // ==========================================
 
 model Booking {
-  id          Int           @id @default(autoincrement())
+  id          Int         @id @default(autoincrement())
   userId      Int
-  user        User          @relation("CustomerBookings", fields: [userId], references: [id])
+  user        User        @relation("CustomerBookings", fields: [userId], references: [id])
   petId       Int
-  pet         Pet           @relation(fields: [petId], references: [id])
-  staffId     Int?
-  staff       User?         @relation("StaffBookings", fields: [staffId], references: [id])
+  pet         Pet         @relation(fields: [petId], references: [id])
   bookingType BookingType
-  status      BookingStatus @default(PENDING)
 
-  // Grooming fields
-  expectedBookingDate DateTime?
-  groomingStep        GroomingServiceCategory?
-
-  // Boarding fields
   expectedCheckInDate  DateTime?
   expectedCheckOutDate DateTime?
 
@@ -104,25 +96,31 @@ model Booking {
   updatedAt DateTime @updatedAt
 
   // Relations
-  groomingServices    BookingGroomingService[]
+  bookingServices     BookingService[]
   bookingBoardingRoom BookingBoardingRoom?
-  logs                BookingLog[]
 
   @@index([userId])
-  @@index([staffId])
-  @@index([expectedBookingDate, status])
+  @@index([petId])
+  @@index([bookingType])
 }
 
-model BookingGroomingService {
-  id                Int             @id @default(autoincrement())
-  bookingId         Int
-  booking           Booking         @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  groomingServiceId Int
-  groomingService   GroomingService @relation(fields: [groomingServiceId], references: [id])
-  price             Decimal         @db.Decimal(12, 2)
-  durationMinutes   Int
+model BookingService {
+  id              Int               @id @default(autoincrement())
+  bookingId       Int
+  booking         Booking           @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  serviceId       Int
+  service         Service           @relation(fields: [serviceId], references: [id])
+  staffId         Int?
+  staff           User?             @relation("StaffServices", fields: [staffId], references: [id])
+  actualStartTime DateTime?
+  actualEndTime   DateTime?
+  status          ServiceItemStatus @default(PENDING)
+  price           Int
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
 
   @@index([bookingId])
+  @@index([staffId])
 }
 
 model BookingBoardingRoom {
@@ -131,57 +129,29 @@ model BookingBoardingRoom {
   booking        Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   boardingRoomId Int
   boardingRoom   BoardingRoom @relation(fields: [boardingRoomId], references: [id])
-  price          Decimal      @db.Decimal(12, 2)
+  price          Int
 
   @@index([boardingRoomId])
 }
 
 // ==========================================
-// 5. BOOKING LOG (SHADOW TABLE FOR TRIGGER)
-// ==========================================
-
-model BookingLog {
-  id        Int     @id @default(autoincrement())
-  bookingId Int
-  booking   Booking @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-
-  // Mirroring fields of Booking
-  userId               Int
-  petId                Int
-  staffId              Int?
-  bookingType          BookingType
-  status               BookingStatus
-  expectedBookingDate  DateTime?
-  groomingStep         GroomingServiceCategory?
-  expectedCheckInDate  DateTime?
-  expectedCheckOutDate DateTime?
-  isDelete             Boolean                  @default(false)
-
-  // Audit metadata for Trigger
-  action    String // "INSERT", "UPDATE", "DELETE"
-  changedAt DateTime @default(now())
-
-  @@index([bookingId, changedAt])
-}
-
-// ==========================================
-// 6. BOARDING ROOM MANAGEMENT
+// 5. BOARDING ROOM MANAGEMENT
 // ==========================================
 
 model BoardingRoom {
-  id            Int        @id @default(autoincrement())
-  name          String     @unique // Tên phòng/chuồng (ví dụ: "Phòng VIP 01", "Chuồng Standard 02")
-  description   String?
-  pricePerNight Decimal    @db.Decimal(12, 2)
-  status        RoomStatus @default(AVAILABLE)
-  isDelete      Boolean    @default(false)
+  id           Int        @id @default(autoincrement())
+  name         String     @unique // Tên phòng/chuồng (ví dụ: "Phòng VIP 01", "Chuồng Standard 02")
+  description  String
+  pricePerHour Int
+  status       RoomStatus @default(AVAILABLE)
+  isDelete     Boolean    @default(false)
 
   // Relations
   bookingBoardingRooms BookingBoardingRoom[]
 }
 
 // ==========================================
-// 7. ENUMS
+// 6. ENUMS
 // ==========================================
 
 enum Role {
@@ -196,12 +166,23 @@ enum PetGender {
   UNKNOWN
 }
 
-enum GroomingServiceCategory {
+enum ServiceCategory {
+  // Common / Grooming
+  CHECK_IN
   BATH_AND_DRY
   HAIRCUT
   HYGIENE
   FULL_GROOMING
-  OTHER
+  CHECK_OUT
+
+  // Boarding
+  ASSIGN_ROOM // Boarding: Đưa bé vào phòng/chuồng đã đặt
+  FEEDING // Boarding: Cho ăn theo khẩu phần
+  WATER // Boarding: Cung cấp nước / thay nước
+  WALKING // Boarding: Dắt bé ra ngoài đi dạo
+  MEDICATION // Boarding: Cho uống thuốc
+  CLEANING // Boarding: Vệ sinh chuồng trại
+  DAILY_HEALTH_CHECK // Boarding: Kiểm tra sức khỏe hàng ngày
 }
 
 enum BookingType {
@@ -209,18 +190,14 @@ enum BookingType {
   BOARDING
 }
 
-enum BookingStatus {
-  PENDING
-  CONFIRMED
-  CHECKED_IN
-  IN_PROGRESS
-  COMPLETED
-  CANCELLED
-  NO_SHOW
-}
-
 enum RoomStatus {
   AVAILABLE
   OCCUPIED
   MAINTENANCE
+}
+
+enum ServiceItemStatus {
+  PENDING
+  IN_PROGRESS
+  COMPLETED
 }
