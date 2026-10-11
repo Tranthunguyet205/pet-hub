@@ -81,12 +81,13 @@ model Service {
 // ==========================================
 
 model Booking {
-  id          Int         @id @default(autoincrement())
+  id          Int           @id @default(autoincrement())
   userId      Int
-  user        User        @relation("CustomerBookings", fields: [userId], references: [id])
+  user        User          @relation("CustomerBookings", fields: [userId], references: [id])
   petId       Int
-  pet         Pet         @relation(fields: [petId], references: [id])
+  pet         Pet           @relation(fields: [petId], references: [id])
   bookingType BookingType
+  status      BookingStatus @default(PENDING)
 
   expectedCheckInDate  DateTime?
   expectedCheckOutDate DateTime?
@@ -102,6 +103,7 @@ model Booking {
   @@index([userId])
   @@index([petId])
   @@index([bookingType])
+  @@index([status])
 }
 
 model BookingService {
@@ -115,6 +117,7 @@ model BookingService {
   actualStartTime DateTime?
   actualEndTime   DateTime?
   status          ServiceItemStatus @default(PENDING)
+  imageUrl        String?
   price           Int
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -129,7 +132,7 @@ model BookingBoardingRoom {
   booking        Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
   boardingRoomId Int
   boardingRoom   BoardingRoom @relation(fields: [boardingRoomId], references: [id])
-  price          Int
+  pricePerHour   Int
 
   @@index([boardingRoomId])
 }
@@ -188,6 +191,14 @@ enum ServiceCategory {
 enum BookingType {
   GROOMING
   BOARDING
+}
+
+enum BookingStatus {
+  PENDING // Chờ tiếp nhận / chờ xử lý
+  CONFIRMED // Đã tiếp nhận đơn booking
+  IN_PROGRESS // Đang thực hiện dịch vụ
+  COMPLETED // Hoàn tất (Done)
+  CANCELLED // Đã hủy (Cancel)
 }
 
 enum RoomStatus {
