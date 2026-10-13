@@ -18,6 +18,7 @@ model User {
   fullName     String
   phoneNumber  String?  @unique
   avatarUrl    String?
+  specialty    String?
   role         Role     @default(OWNER)
   isDelete     Boolean  @default(false)
   createdAt    DateTime @default(now())

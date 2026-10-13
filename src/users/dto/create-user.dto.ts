@@ -55,6 +55,14 @@ export class CreateUserDto {
   role?: Role;
 
   @ApiPropertyOptional({
+    description: 'Chuyên môn của người dùng',
+    example: 'Thú y',
+  })
+  @IsString({ message: 'Chuyên môn phải là chuỗi ký tự' })
+  @IsOptional()
+  specialty?: string;
+
+  @ApiPropertyOptional({
     type: 'string',
     format: 'binary',
     description: 'Tệp ảnh đại diện (avatar)',

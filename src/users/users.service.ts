@@ -33,7 +33,7 @@ export class UsersService {
    * Tạo người dùng mới (Dành cho ADMIN)
    */
   async create(createUserDto: CreateUserDto, file?: Express.Multer.File) {
-    const { email, password, fullName, phoneNumber, role } = createUserDto;
+    const { email, password, fullName, phoneNumber, role, specialty } = createUserDto;
 
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -74,6 +74,7 @@ export class UsersService {
         role: role || Role.OWNER,
         avatarUrl,
         isDelete: false,
+        ...(specialty && { specialty: specialty.trim() }),
       },
     });
 
@@ -117,6 +118,7 @@ export class UsersService {
           fullName: true,
           phoneNumber: true,
           avatarUrl: true,
+          specialty: true,
           role: true,
           isDelete: true,
           createdAt: true,
@@ -196,6 +198,7 @@ export class UsersService {
       data: {
         ...(updateProfileDto.fullName && { fullName: updateProfileDto.fullName.trim() }),
         ...(updateProfileDto.phoneNumber && { phoneNumber: updateProfileDto.phoneNumber.trim() }),
+        ...(updateProfileDto.specialty && { specialty: updateProfileDto.specialty.trim() }),
         ...(avatarUrl !== undefined && { avatarUrl }),
       },
     });
@@ -263,6 +266,7 @@ export class UsersService {
       data: {
         ...(updateUserDto.fullName && { fullName: updateUserDto.fullName.trim() }),
         ...(updateUserDto.phoneNumber && { phoneNumber: updateUserDto.phoneNumber.trim() }),
+        ...(updateUserDto.specialty && { specialty: updateUserDto.specialty.trim() }),
         ...(updateUserDto.role && { role: updateUserDto.role }),
         ...(avatarUrl !== undefined && { avatarUrl }),
       },
