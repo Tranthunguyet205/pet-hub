@@ -11,7 +11,7 @@ async function bootstrap() {
     cors: {
       origin: '*',
       methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'Accept'],
+      allowedHeaders: ['Content-Type', 'Authorization', 'Accept', 'ngrok-skip-browser-warning'],
     },
   });
   app.setGlobalPrefix('api', {
