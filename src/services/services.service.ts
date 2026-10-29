@@ -1,8 +1,13 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { CreateServiceDto } from './dto/create-service.dto';
 import { QueryServiceDto } from './dto/query-service.dto';
 import { UpdateServiceDto } from './dto/update-service.dto';
-import { Prisma } from '@prisma/client';
+import { Prisma, ServiceCategory, BookingStatus } from '@prisma/client';
 import { toPublicImageUrl } from '../common/utils/image-url.util';
 
 @Injectable()
@@ -20,6 +25,41 @@ export class ServicesService {
       ...service,
       imageUrl: toPublicImageUrl(service.imageUrl),
     };
+  }
+
+  /**
+   * Tạo mới một dịch vụ (Chỉ Admin)
+   * Chặn tuyệt đối việc tạo dịch vụ có category CHECK_IN hoặc CHECK_OUT
+   */
+  async create(
+    createServiceDto: CreateServiceDto,
+    file?: Express.Multer.File,
+  ) {
+    if (
+      createServiceDto.category === ServiceCategory.CHECK_IN ||
+      createServiceDto.category === ServiceCategory.CHECK_OUT
+    ) {
+      throw new BadRequestException(
+        'Không được phép tạo mới dịch vụ hệ thống cố định CHECK_IN hoặc CHECK_OUT.',
+      );
+    }
+
+    const imageUrl = file ? `/files/services/${file.filename}` : null;
+
+    const createdService = await this.prisma.service.create({
+      data: {
+        name: createServiceDto.name.trim(),
+        category: createServiceDto.category,
+        description: createServiceDto.description
+          ? createServiceDto.description.trim()
+          : null,
+        durationMinutes: createServiceDto.durationMinutes,
+        basePrice: createServiceDto.basePrice,
+        imageUrl,
+      },
+    });
+
+    return this.formatServiceImage(createdService);
   }
 
   /**
@@ -103,6 +143,7 @@ export class ServicesService {
 
   /**
    * Cập nhật thông tin dịch vụ (Chỉ Admin)
+   * Chặn cập nhật đối với dịch vụ hệ thống CHECK_IN hoặc CHECK_OUT
    */
   async update(
     id: number,
@@ -119,6 +160,15 @@ export class ServicesService {
     if (!existing) {
       throw new NotFoundException(
         `Không tìm thấy dịch vụ với ID ${id} hoặc dịch vụ không tồn tại.`,
+      );
+    }
+
+    if (
+      existing.category === ServiceCategory.CHECK_IN ||
+      existing.category === ServiceCategory.CHECK_OUT
+    ) {
+      throw new BadRequestException(
+        'Không thể chỉnh sửa dịch vụ hệ thống cố định CHECK_IN hoặc CHECK_OUT.',
       );
     }
 
@@ -152,5 +202,69 @@ export class ServicesService {
     });
 
     return this.formatServiceImage(updatedService);
+  }
+
+  /**
+   * Xóa mềm dịch vụ (Chỉ Admin)
+   * Chặn xóa CHECK_IN, CHECK_OUT và các dịch vụ đang được dùng trong booking chưa hoàn tất
+   */
+  async remove(id: number) {
+    const existing = await this.prisma.service.findFirst({
+      where: {
+        id,
+        isDelete: false,
+      },
+    });
+
+    if (!existing) {
+      throw new NotFoundException(
+        `Không tìm thấy dịch vụ với ID ${id} hoặc dịch vụ không tồn tại.`,
+      );
+    }
+
+    if (
+      existing.category === ServiceCategory.CHECK_IN ||
+      existing.category === ServiceCategory.CHECK_OUT
+    ) {
+      throw new BadRequestException(
+        'Không thể xóa dịch vụ hệ thống cố định CHECK_IN hoặc CHECK_OUT.',
+      );
+    }
+
+    const activeBookingService = await this.prisma.bookingService.findFirst({
+      where: {
+        serviceId: id,
+        booking: {
+          isDelete: false,
+          status: {
+            in: [
+              BookingStatus.PENDING,
+              BookingStatus.CONFIRMED,
+              BookingStatus.IN_PROGRESS,
+            ],
+          },
+        },
+      },
+      include: {
+        booking: true,
+      },
+    });
+
+    if (activeBookingService) {
+      throw new BadRequestException(
+        `Không thể xóa dịch vụ "${existing.name}" vì dịch vụ đang được sử dụng trong đơn đặt lịch ID: ${activeBookingService.bookingId} (Trạng thái: ${activeBookingService.booking.status}).`,
+      );
+    }
+
+    await this.prisma.service.update({
+      where: { id },
+      data: {
+        isDelete: true,
+      },
+    });
+
+    return {
+      message: `Đã xóa thành công dịch vụ "${existing.name}" (ID: ${id}).`,
+    };
   }
 }
