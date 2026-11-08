@@ -90,6 +90,13 @@ model Booking {
   bookingType BookingType
   status      BookingStatus @default(PENDING)
 
+  // Payment information
+  totalAmount   Int           @default(0)
+  paymentStatus PaymentStatus @default(UNPAID)
+  paymentMethod PaymentMethod?
+  paidAt        DateTime?
+  paymentNote   String?
+
   expectedCheckInDate  DateTime?
   expectedCheckOutDate DateTime?
 
@@ -105,6 +112,7 @@ model Booking {
   @@index([petId])
   @@index([bookingType])
   @@index([status])
+  @@index([paymentStatus])
 }
 
 model BookingService {
@@ -212,4 +220,16 @@ enum ServiceItemStatus {
   PENDING
   IN_PROGRESS
   COMPLETED
+}
+
+enum PaymentStatus {
+  UNPAID
+  PAID
+  REFUNDED
+}
+
+enum PaymentMethod {
+  CASH
+  BANK_TRANSFER
+  ONLINE
 }
