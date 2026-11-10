@@ -18,6 +18,10 @@ import {
   ServiceItemStatus,
 } from '@prisma/client';
 import { toPublicImageUrl } from '../common/utils/image-url.util';
+import {
+  calculateBookingCost,
+  BookingCostBreakdown,
+} from './utils/booking-cost.util';
 
 export const ALLOWED_BOOKING_SERVICE_CATEGORIES: ServiceCategory[] = [
   ServiceCategory.BATH_AND_DRY,
@@ -402,7 +406,20 @@ export class BookingsService {
       );
     }
 
-    return this.formatBookingImages(booking);
+    const formattedBooking = this.formatBookingImages(booking);
+    const costBreakdown = calculateBookingCost(formattedBooking);
+
+    return {
+      ...formattedBooking,
+      costBreakdown,
+    };
+  }
+
+  /**
+   * Tính toán chi phí đơn booking (tiện ích tái sử dụng cho các service khác)
+   */
+  calculateCost(booking: any): BookingCostBreakdown {
+    return calculateBookingCost(booking);
   }
 
   /**
