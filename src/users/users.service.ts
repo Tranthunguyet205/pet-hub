@@ -83,6 +83,26 @@ export class UsersService {
   }
 
   /**
+   * Thống kê số lượng người dùng theo vai trò (Dành cho ADMIN)
+   */
+  async getStats() {
+    const groups = await this.prisma.user.groupBy({
+      by: ['role'],
+      where: { isDelete: false },
+      _count: true,
+    });
+
+    const stats = { total: 0, owners: 0, staffs: 0, admins: 0 };
+    for (const g of groups) {
+      stats.total += g._count;
+      if (g.role === Role.OWNER) stats.owners = g._count;
+      else if (g.role === Role.STAFF) stats.staffs = g._count;
+      else if (g.role === Role.ADMIN) stats.admins = g._count;
+    }
+    return stats;
+  }
+
+  /**
    * Lấy danh sách người dùng có phân trang, tìm kiếm và lọc (Dành cho ADMIN)
    */
   async findAll(query: QueryUserDto) {

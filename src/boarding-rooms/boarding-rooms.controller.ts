@@ -9,13 +9,17 @@ import {
   Query,
   UseGuards,
   ParseIntPipe,
+  UseInterceptors,
+  UploadedFile,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import {
   ApiTags,
   ApiOperation,
   ApiResponse,
   ApiBearerAuth,
   ApiParam,
+  ApiConsumes,
 } from '@nestjs/swagger';
 import { BoardingRoomsService } from './boarding-rooms.service';
 import { CreateBoardingRoomDto } from './dto/create-boarding-room.dto';
@@ -25,6 +29,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { Role } from '@prisma/client';
+import { boardingRoomImageUploadOptions } from '../common/utils/multer-options.util';
 
 @ApiTags('Boarding Rooms')
 @ApiBearerAuth('JWT-auth')
@@ -39,9 +44,11 @@ export class BoardingRoomsController {
    * Tạo phòng/chuồng lưu trú mới (Chỉ ADMIN)
    */
   @Post()
+  @UseInterceptors(FileInterceptor('image', boardingRoomImageUploadOptions))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Tạo phòng lưu trú mới (Admin Only)',
-    description: 'Tạo phòng lưu trú mới với tên, mô tả, đơn giá theo giờ và trạng thái phòng.',
+    description: 'Tạo phòng lưu trú mới với tên, mô tả, đơn giá theo giờ, trạng thái phòng và hình ảnh.',
   })
   @ApiResponse({
     status: 201,
@@ -63,8 +70,11 @@ export class BoardingRoomsController {
     status: 409,
     description: 'Tên phòng lưu trú đã tồn tại.',
   })
-  create(@Body() createDto: CreateBoardingRoomDto) {
-    return this.boardingRoomsService.create(createDto);
+  create(
+    @Body() createDto: CreateBoardingRoomDto,
+    @UploadedFile() file?: Express.Multer.File,
+  ) {
+    return this.boardingRoomsService.create(createDto, file);
   }
 
   /**
@@ -131,9 +141,11 @@ export class BoardingRoomsController {
    * Cập nhật thông tin phòng lưu trú (Chỉ ADMIN)
    */
   @Patch(':id')
+  @UseInterceptors(FileInterceptor('image', boardingRoomImageUploadOptions))
+  @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Cập nhật phòng lưu trú (Admin Only)',
-    description: 'Cập nhật name, description, pricePerHour hoặc status của phòng lưu trú.',
+    description: 'Cập nhật name, description, pricePerHour, status hoặc hình ảnh của phòng lưu trú.',
   })
   @ApiParam({
     name: 'id',
@@ -167,8 +179,9 @@ export class BoardingRoomsController {
   update(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateDto: UpdateBoardingRoomDto,
+    @UploadedFile() file?: Express.Multer.File,
   ) {
-    return this.boardingRoomsService.update(id, updateDto);
+    return this.boardingRoomsService.update(id, updateDto, file);
   }
 
   /**

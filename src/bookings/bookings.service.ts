@@ -9,6 +9,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
+import { QueryAvailabilityDto } from './dto/query-availability.dto';
 import { Prisma } from '@prisma/client';
 import {
   Role,
@@ -24,10 +25,19 @@ import {
 } from './utils/booking-cost.util';
 
 export const ALLOWED_BOOKING_SERVICE_CATEGORIES: ServiceCategory[] = [
+  // Grooming
   ServiceCategory.BATH_AND_DRY,
   ServiceCategory.HAIRCUT,
   ServiceCategory.HYGIENE,
   ServiceCategory.FULL_GROOMING,
+  // Boarding
+  ServiceCategory.ASSIGN_ROOM,
+  ServiceCategory.FEEDING,
+  ServiceCategory.WATER,
+  ServiceCategory.WALKING,
+  ServiceCategory.MEDICATION,
+  ServiceCategory.CLEANING,
+  ServiceCategory.DAILY_HEALTH_CHECK,
 ];
 
 @Injectable()
@@ -648,6 +658,78 @@ export class BookingsService {
         limit,
         totalPages: Math.ceil(total / limit),
       },
+    };
+  }
+
+  /**
+   * Kiểm tra slot khả dụng theo ngày
+   * Đếm số booking trên mỗi khung giờ 30 phút, so với capacity tối đa.
+   */
+  async getAvailability(query: QueryAvailabilityDto) {
+    const activeStaffCount = await this.prisma.user.count({
+      where: { role: Role.STAFF, isDelete: false },
+    });
+    const maxPerSlot = Math.max(activeStaffCount, 1);
+
+    const TIME_SLOTS = [
+      '08:00', '08:30', '09:00', '09:30', '10:00', '10:30',
+      '11:00', '11:30', '13:00', '13:30', '14:00', '14:30',
+      '15:00', '15:30', '16:00', '16:30',
+    ];
+
+    const dateStart = new Date(`${query.date}T00:00:00`);
+    const dateEnd = new Date(`${query.date}T23:59:59`);
+
+    const where: Prisma.BookingWhereInput = {
+      isDelete: false,
+      expectedCheckInDate: {
+        gte: dateStart,
+        lte: dateEnd,
+      },
+      status: {
+        notIn: [BookingStatus.CANCELLED],
+      },
+    };
+
+    if (query.bookingType) {
+      where.bookingType = query.bookingType;
+    }
+
+    const bookings = await this.prisma.booking.findMany({
+      where,
+      select: {
+        expectedCheckInDate: true,
+      },
+    });
+
+    const slotCounts = new Map<string, number>();
+    for (const slot of TIME_SLOTS) {
+      slotCounts.set(slot, 0);
+    }
+
+    for (const booking of bookings) {
+      if (!booking.expectedCheckInDate) continue;
+      const hours = String(booking.expectedCheckInDate.getHours()).padStart(2, '0');
+      const minutes = String(booking.expectedCheckInDate.getMinutes()).padStart(2, '0');
+      const timeKey = `${hours}:${minutes}`;
+      if (slotCounts.has(timeKey)) {
+        slotCounts.set(timeKey, slotCounts.get(timeKey)! + 1);
+      }
+    }
+
+    const slots = TIME_SLOTS.map((time) => {
+      const current = slotCounts.get(time) ?? 0;
+      return {
+        time,
+        current,
+        max: maxPerSlot,
+        available: current < maxPerSlot,
+      };
+    });
+
+    return {
+      date: query.date,
+      slots,
     };
   }
 }

@@ -9,19 +9,28 @@ import { CreateBoardingRoomDto } from './dto/create-boarding-room.dto';
 import { UpdateBoardingRoomDto } from './dto/update-boarding-room.dto';
 import { QueryBoardingRoomDto } from './dto/query-boarding-room.dto';
 import { BookingStatus, Prisma, RoomStatus } from '@prisma/client';
+import { toPublicImageUrl } from '../common/utils/image-url.util';
 
 @Injectable()
 export class BoardingRoomsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  /**
-   * POST /api/boarding-rooms
-   * Tạo phòng/chuồng lưu trú mới
-   */
-  async create(createDto: CreateBoardingRoomDto) {
+  private formatBoardingRoomImage<T extends { imageUrl?: string | null }>(
+    room: T,
+  ): T {
+    if (!room) return room;
+    return {
+      ...room,
+      imageUrl: toPublicImageUrl(room.imageUrl),
+    };
+  }
+
+  async create(
+    createDto: CreateBoardingRoomDto,
+    file?: Express.Multer.File,
+  ) {
     const trimmedName = createDto.name.trim();
 
-    // 1. Kiểm tra trùng tên phòng
     const existing = await this.prisma.boardingRoom.findFirst({
       where: {
         name: trimmedName,
@@ -35,15 +44,19 @@ export class BoardingRoomsService {
       );
     }
 
-    // 2. Tạo bản ghi mới
-    return this.prisma.boardingRoom.create({
+    const imageUrl = file ? `/files/boardingRooms/${file.filename}` : null;
+
+    const createdRoom = await this.prisma.boardingRoom.create({
       data: {
         name: trimmedName,
         description: createDto.description.trim(),
         pricePerHour: createDto.pricePerHour,
         status: createDto.status ?? RoomStatus.AVAILABLE,
+        imageUrl,
       },
     });
+
+    return this.formatBoardingRoomImage(createdRoom);
   }
 
   /**
@@ -86,7 +99,7 @@ export class BoardingRoomsService {
     ]);
 
     return {
-      data,
+      data: data.map((room) => this.formatBoardingRoomImage(room)),
       meta: {
         total,
         page,
@@ -112,14 +125,14 @@ export class BoardingRoomsService {
       throw new NotFoundException(`Không tìm thấy phòng lưu trú với ID: ${id}`);
     }
 
-    return room;
+    return this.formatBoardingRoomImage(room);
   }
 
-  /**
-   * PATCH /api/boarding-rooms/:id
-   * Cập nhật thông tin phòng lưu trú
-   */
-  async update(id: number, updateDto: UpdateBoardingRoomDto) {
+  async update(
+    id: number,
+    updateDto: UpdateBoardingRoomDto,
+    file?: Express.Multer.File,
+  ) {
     // 1. Kiểm tra phòng tồn tại
     const room = await this.prisma.boardingRoom.findFirst({
       where: {
@@ -167,10 +180,16 @@ export class BoardingRoomsService {
       updateData.status = updateDto.status;
     }
 
-    return this.prisma.boardingRoom.update({
+    if (file) {
+      updateData.imageUrl = `/files/boardingRooms/${file.filename}`;
+    }
+
+    const updatedRoom = await this.prisma.boardingRoom.update({
       where: { id },
       data: updateData,
     });
+
+    return this.formatBoardingRoomImage(updatedRoom);
   }
 
   /**

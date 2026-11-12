@@ -41,7 +41,7 @@ import { avatarUploadOptions } from '../common/utils/multer-options.util';
 @UseGuards(JwtAuthGuard)
 @Controller('users')
 export class UsersController {
-  constructor(private readonly usersService: UsersService) {}
+  constructor(private readonly usersService: UsersService) { }
 
   // ==========================================
   // 1. ENDPOINTS DÀNH CHO USER HIỆN TẠI (/me)
@@ -172,6 +172,29 @@ export class UsersController {
     @UploadedFile() file?: Express.Multer.File,
   ) {
     return this.usersService.create(createUserDto, file);
+  }
+
+  /**
+   * GET /api/users/stats
+   * Thống kê số lượng người dùng theo vai trò (Chỉ ADMIN)
+   */
+  @Get('stats')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN)
+  @ApiOperation({
+    summary: 'Thống kê số lượng người dùng theo vai trò (Admin Only)',
+    description: 'Trả về tổng số người dùng và số lượng theo từng role: OWNER, STAFF, ADMIN.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Thống kê số lượng người dùng.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không đủ quyền truy cập (Yêu cầu Role ADMIN).',
+  })
+  getStats() {
+    return this.usersService.getStats();
   }
 
   /**
