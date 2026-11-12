@@ -22,6 +22,7 @@ import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
+import { QueryAvailabilityDto } from './dto/query-availability.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -59,6 +60,25 @@ export class BookingsController {
   })
   findAll(@Request() req: any, @Query() query: QueryBookingDto) {
     return this.bookingsService.findAll(req.user.id, req.user.role, query);
+  }
+
+  /**
+   * GET /api/bookings/availability
+   * Kiểm tra khung giờ khả dụng theo ngày (Tất cả role)
+   */
+  @Get('availability')
+  @Roles(Role.ADMIN, Role.STAFF, Role.OWNER)
+  @ApiOperation({
+    summary: 'Kiểm tra slot khả dụng theo ngày',
+    description:
+      'Trả về danh sách các khung giờ 30 phút trong ngày kèm số lượng booking hiện tại và trạng thái khả dụng. Dùng để hiển thị khung giờ nào còn trống khi đặt lịch.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách slot khả dụng theo ngày.',
+  })
+  getAvailability(@Query() query: QueryAvailabilityDto) {
+    return this.bookingsService.getAvailability(query);
   }
 
   /**

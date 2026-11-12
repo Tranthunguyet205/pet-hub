@@ -146,6 +146,7 @@ model BoardingRoom {
   id           Int        @id @default(autoincrement())
   name         String     @unique // Tên phòng/chuồng (ví dụ: "Phòng VIP 01", "Chuồng Standard 02")
   description  String
+  imageUrl     String?
   pricePerHour Int
   status       RoomStatus @default(AVAILABLE)
   isDelete     Boolean    @default(false)

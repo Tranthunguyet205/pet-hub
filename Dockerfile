@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 
 # Cài đặt OpenSSL và libc6-compat cho Prisma Query Engine trên Alpine Linux
 RUN apk add --no-cache openssl libc6-compat

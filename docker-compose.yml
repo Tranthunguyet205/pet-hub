@@ -12,7 +12,7 @@ services:
     volumes:
       - pethub_postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-pethub}']
+      test: [ 'CMD-SHELL', 'pg_isready -U ${DB_USER:-postgres} -d ${DB_NAME:-pethub}' ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,6 +29,11 @@ services:
       - '${PORT:-3000}:3000'
     env_file:
       - .env
+    environment:
+      # Inside Docker, reach Postgres by service name, not localhost
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DATABASE_URL: postgresql://${DB_USER:-postgres}:${DB_PASSWORD:-postgrespassword}@postgres:5432/${DB_NAME:-pethub}?schema=${DB_SCHEMA:-public}
     depends_on:
       postgres:
         condition: service_healthy
@@ -36,21 +41,20 @@ services:
       - ./files:/app/files
     networks:
       - pethub_net
-
-  ngrok:
-    image: ngrok/ngrok:latest
-    container_name: pethub-ngrok
-    restart: always
-    environment:
-      NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
-    command:
-      - 'http'
-      - '--url=${NGROK_DOMAIN}'
-      - 'backend:${PORT:-3000}'
-    depends_on:
-      - backend
-    networks:
-      - pethub_net
+  # ngrok:
+  #   image: ngrok/ngrok:latest
+  #   container_name: pethub-ngrok
+  #   restart: always
+  #   environment:
+  #     NGROK_AUTHTOKEN: ${NGROK_AUTHTOKEN}
+  #   command:
+  #     - 'http'
+  #     - '--url=${NGROK_DOMAIN}'
+  #     - 'backend:${PORT:-3000}'
+  #   depends_on:
+  #     - backend
+  #   networks:
+  #     - pethub_net
 
 volumes:
   pethub_postgres_data:
