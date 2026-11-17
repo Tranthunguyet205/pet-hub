@@ -10,6 +10,7 @@ import { PublicImagesModule } from './public-images/public-images.module';
 import { ServicesModule } from './services/services.module';
 import { BookingsModule } from './bookings/bookings.module';
 import { BoardingRoomsModule } from './boarding-rooms/boarding-rooms.module';
+import { ChatbotModule } from './chatbot/chatbot.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { BoardingRoomsModule } from './boarding-rooms/boarding-rooms.module';
     ServicesModule,
     BookingsModule,
     BoardingRoomsModule,
+    ChatbotModule,
   ],
   controllers: [AppController],
   providers: [AppService],
