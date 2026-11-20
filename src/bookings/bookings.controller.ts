@@ -21,6 +21,7 @@ import {
 import { BookingsService } from './bookings.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
+import { UpdateBookingDto } from './dto/update-booking.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
 import { QueryAvailabilityDto } from './dto/query-availability.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -160,16 +161,65 @@ export class BookingsController {
   }
 
   /**
-   * PATCH /api/bookings/:id/status
-   * Cập nhật trạng thái đơn đặt lịch (Chỉ ADMIN & STAFF)
+   * PATCH /api/bookings/:id
+   * Sửa đơn đặt lịch: đổi lịch hẹn, ghi chú hoặc danh sách dịch vụ
    */
-  @Patch(':id/status')
-  @Roles(Role.ADMIN, Role.STAFF)
+  @Patch(':id')
+  @Roles(Role.ADMIN, Role.STAFF, Role.OWNER)
   @ApiParam({ name: 'id', description: 'ID đơn đặt lịch', example: 1 })
   @ApiOperation({
-    summary: 'Cập nhật trạng thái đơn đặt lịch (Admin & Staff Only)',
+    summary: 'Sửa đơn đặt lịch (đổi lịch / ghi chú / dịch vụ)',
     description:
-      'Chỉ Admin và Staff có quyền cập nhật trạng thái đơn booking (PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED).',
+      'Chủ nuôi chỉ sửa được đơn của mình khi đơn còn PENDING. Admin và Staff sửa được khi đơn đang PENDING hoặc CONFIRMED. ' +
+      'Từ CHECKED_IN trở đi không sửa được nữa. Nếu truyền serviceIds thì toàn bộ dịch vụ khách chọn sẽ được thay thế, ' +
+      'hai bước hệ thống CHECK_IN và CHECK_OUT luôn được giữ nguyên. Không dùng endpoint này để đổi trạng thái.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Cập nhật đơn đặt lịch thành công.',
+  })
+  @ApiResponse({
+    status: 400,
+    description: 'Dữ liệu không hợp lệ hoặc đơn không còn ở trạng thái cho phép sửa.',
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Chưa đăng nhập hoặc Token không hợp lệ.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không có quyền sửa đơn đặt lịch này.',
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Không tìm thấy đơn đặt lịch.',
+  })
+  update(
+    @Param('id', ParseIntPipe) id: number,
+    @Body() updateBookingDto: UpdateBookingDto,
+    @Request() req: any,
+  ) {
+    return this.bookingsService.update(
+      id,
+      updateBookingDto,
+      req.user.id,
+      req.user.role,
+    );
+  }
+
+  /**
+   * PATCH /api/bookings/:id/status
+   * Cập nhật trạng thái đơn đặt lịch theo máy trạng thái
+   */
+  @Patch(':id/status')
+  @Roles(Role.ADMIN, Role.STAFF, Role.OWNER)
+  @ApiParam({ name: 'id', description: 'ID đơn đặt lịch', example: 1 })
+  @ApiOperation({
+    summary: 'Cập nhật trạng thái đơn đặt lịch',
+    description:
+      'Chuyển trạng thái theo máy trạng thái: PENDING → CONFIRMED → CHECKED_IN → IN_PROGRESS → COMPLETED; ' +
+      'PENDING/CONFIRMED/CHECKED_IN có thể chuyển sang CANCELLED, PENDING/CONFIRMED có thể chuyển sang NO_SHOW. ' +
+      'Admin & Staff thực hiện mọi chuyển trạng thái hợp lệ. Owner chỉ được hủy đơn của chính mình và chỉ khi còn ít nhất 12 tiếng tới giờ hẹn.',
   })
   @ApiResponse({
     status: 200,
@@ -185,7 +235,7 @@ export class BookingsController {
   })
   @ApiResponse({
     status: 403,
-    description: 'Không đủ quyền truy cập (Yêu cầu Role ADMIN hoặc STAFF).',
+    description: 'Không đủ quyền thực hiện chuyển trạng thái này.',
   })
   @ApiResponse({
     status: 404,
@@ -194,8 +244,14 @@ export class BookingsController {
   updateStatus(
     @Param('id', ParseIntPipe) id: number,
     @Body() updateBookingStatusDto: UpdateBookingStatusDto,
+    @Request() req: any,
   ) {
-    return this.bookingsService.updateStatus(id, updateBookingStatusDto);
+    return this.bookingsService.updateStatus(
+      id,
+      updateBookingStatusDto,
+      req.user.id,
+      req.user.role,
+    );
   }
 
   /**

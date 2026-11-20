@@ -117,6 +117,11 @@ export class BookingServicesController {
           type: 'integer',
           example: 180000,
         },
+        staffId: {
+          type: 'integer',
+          description: 'ID nhân viên phụ trách thực hiện dịch vụ',
+          example: 3,
+        },
         imageUrl: {
           type: 'string',
           example: 'files/bookingServices/booking-service-12345.jpg',

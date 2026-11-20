@@ -28,13 +28,13 @@ export class CreateBoardingRoomDto {
   description: string;
 
   @ApiProperty({
-    description: 'Đơn giá lưu trú theo giờ (VNĐ/giờ)',
+    description: 'Đơn giá lưu trú theo đêm (VNĐ/đêm)',
     example: 60000,
   })
   @Type(() => Number)
-  @IsInt({ message: 'pricePerHour phải là số nguyên' })
-  @Min(0, { message: 'pricePerHour không được âm' })
-  pricePerHour: number;
+  @IsInt({ message: 'pricePerNight phải là số nguyên' })
+  @Min(0, { message: 'pricePerNight không được âm' })
+  pricePerNight: number;
 
   @ApiPropertyOptional({
     description: 'Trạng thái ban đầu của phòng (mặc định AVAILABLE)',

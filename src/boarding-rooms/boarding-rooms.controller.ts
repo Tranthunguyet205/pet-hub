@@ -48,7 +48,7 @@ export class BoardingRoomsController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Tạo phòng lưu trú mới (Admin Only)',
-    description: 'Tạo phòng lưu trú mới với tên, mô tả, đơn giá theo giờ, trạng thái phòng và hình ảnh.',
+    description: 'Tạo phòng lưu trú mới với tên, mô tả, đơn giá theo đêm, trạng thái phòng và hình ảnh.',
   })
   @ApiResponse({
     status: 201,
@@ -81,9 +81,37 @@ export class BoardingRoomsController {
    * GET /api/boarding-rooms
    * Lấy danh sách phòng lưu trú (Chỉ ADMIN)
    */
+  /**
+   * GET /api/boarding-rooms/price-range
+   * Khoảng giá phòng theo đêm, cho form đặt lịch của chủ nuôi.
+   *
+   * Phải khai báo TRƯỚC @Get(':id'), nếu không 'price-range' sẽ bị
+   * ParseIntPipe của route đó bắt và trả 400.
+   */
+  @Roles(Role.ADMIN, Role.STAFF, Role.OWNER)
+  @Get('price-range')
+  @ApiOperation({
+    summary: 'Khoảng giá phòng lưu trú theo đêm',
+    description:
+      'Trả về min/max giá theo đêm của các phòng có thể xếp (bỏ qua phòng bảo trì). ' +
+      'Dùng cho form đặt lịch của chủ nuôi để ước lượng tiền phòng khi chưa biết sẽ được xếp phòng nào. ' +
+      'Không trả danh sách phòng.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Khoảng giá phòng.',
+    schema: {
+      example: { min: 150000, max: 600000, roomCount: 9, unit: 'NIGHT' },
+    },
+  })
+  getPriceRange() {
+    return this.boardingRoomsService.getPriceRange();
+  }
+
+  @Roles(Role.ADMIN, Role.STAFF)
   @Get()
   @ApiOperation({
-    summary: 'Lấy danh sách phòng lưu trú (Admin Only)',
+    summary: 'Lấy danh sách phòng lưu trú (Admin & Staff)',
     description: 'Hỗ trợ phân trang, tìm kiếm theo tên/mô tả và lọc theo trạng thái phòng (RoomStatus).',
   })
   @ApiResponse({
@@ -106,6 +134,7 @@ export class BoardingRoomsController {
    * GET /api/boarding-rooms/:id
    * Lấy thông tin chi tiết phòng lưu trú (Chỉ ADMIN)
    */
+  @Roles(Role.ADMIN, Role.STAFF)
   @Get(':id')
   @ApiOperation({
     summary: 'Lấy chi tiết phòng lưu trú theo ID (Admin Only)',
@@ -145,7 +174,7 @@ export class BoardingRoomsController {
   @ApiConsumes('multipart/form-data')
   @ApiOperation({
     summary: 'Cập nhật phòng lưu trú (Admin Only)',
-    description: 'Cập nhật name, description, pricePerHour, status hoặc hình ảnh của phòng lưu trú.',
+    description: 'Cập nhật name, description, pricePerNight, status hoặc hình ảnh của phòng lưu trú.',
   })
   @ApiParam({
     name: 'id',

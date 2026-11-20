@@ -100,6 +100,13 @@ model Booking {
   expectedCheckInDate  DateTime?
   expectedCheckOutDate DateTime?
 
+  // Ghi chú của chủ nuôi khi đặt lịch
+  notes String?
+
+  // Thông tin hủy đơn
+  cancelReason String?
+  cancelledAt  DateTime?
+
   isDelete  Boolean  @default(false)
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -127,6 +134,7 @@ model BookingService {
   actualEndTime   DateTime?
   status          ServiceItemStatus @default(PENDING)
   imageUrl        String?
+  notes           String?
   price           Int
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
@@ -136,12 +144,12 @@ model BookingService {
 }
 
 model BookingBoardingRoom {
-  id             Int          @id @default(autoincrement())
-  bookingId      Int          @unique
-  booking        Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
-  boardingRoomId Int
-  boardingRoom   BoardingRoom @relation(fields: [boardingRoomId], references: [id])
-  pricePerHour   Int
+  id              Int          @id @default(autoincrement())
+  bookingId       Int          @unique
+  booking         Booking      @relation(fields: [bookingId], references: [id], onDelete: Cascade)
+  boardingRoomId  Int
+  boardingRoom    BoardingRoom @relation(fields: [boardingRoomId], references: [id])
+  pricePerNight   Int
 
   @@index([boardingRoomId])
 }
@@ -151,13 +159,13 @@ model BookingBoardingRoom {
 // ==========================================
 
 model BoardingRoom {
-  id           Int        @id @default(autoincrement())
-  name         String     @unique // Tên phòng/chuồng (ví dụ: "Phòng VIP 01", "Chuồng Standard 02")
-  description  String
-  imageUrl     String?
-  pricePerHour Int
-  status       RoomStatus @default(AVAILABLE)
-  isDelete     Boolean    @default(false)
+  id            Int        @id @default(autoincrement())
+  name          String     @unique // Tên phòng/chuồng (ví dụ: "Phòng VIP 01", "Chuồng Standard 02")
+  description   String
+  imageUrl      String?
+  pricePerNight Int
+  status        RoomStatus @default(AVAILABLE)
+  isDelete      Boolean    @default(false)
 
   // Relations
   bookingBoardingRooms BookingBoardingRoom[]
@@ -206,9 +214,11 @@ enum BookingType {
 enum BookingStatus {
   PENDING // Chờ tiếp nhận / chờ xử lý
   CONFIRMED // Đã tiếp nhận đơn booking
+  CHECKED_IN // Thú cưng đã được tiếp nhận tại cơ sở
   IN_PROGRESS // Đang thực hiện dịch vụ
   COMPLETED // Hoàn tất (Done)
   CANCELLED // Đã hủy (Cancel)
+  NO_SHOW // Khách không đến
 }
 
 enum RoomStatus {

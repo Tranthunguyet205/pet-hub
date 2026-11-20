@@ -1,7 +1,14 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsDateString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
-import { BookingStatus, BookingType } from '@prisma/client';
+import { BookingStatus, BookingType, PaymentStatus } from '@prisma/client';
 
 export class QueryBookingDto {
   @ApiPropertyOptional({
@@ -33,7 +40,7 @@ export class QueryBookingDto {
   })
   @IsEnum(BookingStatus, {
     message:
-      'status phải là một trong các giá trị: PENDING, CONFIRMED, IN_PROGRESS, COMPLETED, CANCELLED',
+      'status phải là một trong các giá trị: PENDING, CONFIRMED, CHECKED_IN, IN_PROGRESS, COMPLETED, CANCELLED, NO_SHOW',
   })
   @IsOptional()
   status?: BookingStatus;
@@ -76,4 +83,51 @@ export class QueryBookingDto {
   @IsString({ message: 'search phải là chuỗi ký tự' })
   @IsOptional()
   search?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Lọc theo ID nhân viên được phân công (trả về booking có ít nhất 1 dịch vụ assign cho staff này)',
+    example: 3,
+  })
+  @Type(() => Number)
+  @IsInt({ message: 'staffId phải là số nguyên' })
+  @IsOptional()
+  staffId?: number;
+
+  @ApiPropertyOptional({
+    description:
+      'Lọc các đơn có expectedCheckInDate từ thời điểm này trở đi (ISO-8601). ' +
+      'Nếu chỉ truyền ngày (YYYY-MM-DD) sẽ được hiểu là 00:00 của ngày đó.',
+    example: '2026-11-13',
+  })
+  @IsDateString(
+    {},
+    { message: 'from phải là chuỗi ngày hợp lệ (ISO-8601 hoặc YYYY-MM-DD)' },
+  )
+  @IsOptional()
+  from?: string;
+
+  @ApiPropertyOptional({
+    description:
+      'Lọc các đơn có expectedCheckInDate đến trước thời điểm này (ISO-8601). ' +
+      'Nếu chỉ truyền ngày (YYYY-MM-DD) sẽ được hiểu là hết ngày đó (23:59:59.999).',
+    example: '2026-11-13',
+  })
+  @IsDateString(
+    {},
+    { message: 'to phải là chuỗi ngày hợp lệ (ISO-8601 hoặc YYYY-MM-DD)' },
+  )
+  @IsOptional()
+  to?: string;
+
+  @ApiPropertyOptional({
+    description: 'Lọc theo trạng thái thanh toán',
+    enum: PaymentStatus,
+    example: PaymentStatus.UNPAID,
+  })
+  @IsEnum(PaymentStatus, {
+    message: 'paymentStatus phải là một trong các giá trị: UNPAID, PAID, REFUNDED',
+  })
+  @IsOptional()
+  paymentStatus?: PaymentStatus;
 }

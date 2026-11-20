@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingDto } from './dto/create-booking.dto';
 import { UpdateBookingStatusDto } from './dto/update-booking-status.dto';
+import { UpdateBookingDto } from './dto/update-booking.dto';
 import { QueryBookingDto } from './dto/query-booking.dto';
 import { QueryAvailabilityDto } from './dto/query-availability.dto';
 import { Prisma } from '@prisma/client';
@@ -15,6 +16,7 @@ import {
   Role,
   BookingStatus,
   BookingType,
+  RoomStatus,
   ServiceCategory,
   ServiceItemStatus,
 } from '@prisma/client';
@@ -23,6 +25,19 @@ import {
   calculateBookingCost,
   BookingCostBreakdown,
 } from './utils/booking-cost.util';
+import {
+  businessDateString,
+  businessDayStart,
+  businessDayEnd,
+  businessTimeKey,
+  parseBusinessRangeBoundary,
+} from '../common/utils/business-time.util';
+import {
+  conflictSearchWindow,
+  getBookingTimeRange,
+  rangesOverlap,
+  TimeRange,
+} from './utils/booking-time.util';
 
 export const ALLOWED_BOOKING_SERVICE_CATEGORIES: ServiceCategory[] = [
   // Grooming
@@ -39,6 +54,51 @@ export const ALLOWED_BOOKING_SERVICE_CATEGORIES: ServiceCategory[] = [
   ServiceCategory.CLEANING,
   ServiceCategory.DAILY_HEALTH_CHECK,
 ];
+
+/**
+ * Máy trạng thái của đơn booking.
+ * Key = trạng thái hiện tại, value = các trạng thái được phép chuyển sang.
+ * Mọi chuyển trạng thái không nằm trong bảng này đều bị từ chối (400).
+ */
+export const BOOKING_STATUS_TRANSITIONS: Record<
+  BookingStatus,
+  BookingStatus[]
+> = {
+  [BookingStatus.PENDING]: [
+    BookingStatus.CONFIRMED,
+    BookingStatus.CANCELLED,
+    BookingStatus.NO_SHOW,
+  ],
+  [BookingStatus.CONFIRMED]: [
+    BookingStatus.CHECKED_IN,
+    BookingStatus.CANCELLED,
+    BookingStatus.NO_SHOW,
+  ],
+  [BookingStatus.CHECKED_IN]: [
+    BookingStatus.IN_PROGRESS,
+    BookingStatus.CANCELLED,
+  ],
+  [BookingStatus.IN_PROGRESS]: [BookingStatus.COMPLETED],
+  [BookingStatus.COMPLETED]: [],
+  [BookingStatus.CANCELLED]: [],
+  [BookingStatus.NO_SHOW]: [],
+};
+
+/** Nhãn tiếng Việt của từng trạng thái (dùng cho thông báo lỗi) */
+export const BOOKING_STATUS_LABELS: Record<BookingStatus, string> = {
+  [BookingStatus.PENDING]: 'Chờ xử lý',
+  [BookingStatus.CONFIRMED]: 'Đã xác nhận',
+  [BookingStatus.CHECKED_IN]: 'Đã tiếp nhận',
+  [BookingStatus.IN_PROGRESS]: 'Đang thực hiện',
+  [BookingStatus.COMPLETED]: 'Hoàn thành',
+  [BookingStatus.CANCELLED]: 'Đã hủy',
+  [BookingStatus.NO_SHOW]: 'Không đến',
+};
+
+/**
+ * BR-02: Chủ nuôi chỉ được tự hủy đơn khi còn cách giờ hẹn ít nhất ngần này giờ.
+ */
+export const CANCEL_DEADLINE_HOURS = 12;
 
 @Injectable()
 export class BookingsService {
@@ -196,7 +256,23 @@ export class BookingsService {
       }
     }
 
-    // 3. Kiểm tra ngày giờ dự kiến (nếu có cả 2 trường)
+    // 3. Đơn BOARDING bắt buộc có cả ngày nhận và ngày trả.
+    // Thiếu ngày trả -> calculateBookingCost() fallback về thời điểm hiện tại,
+    // khiến tiền phòng của đơn tự tăng theo thời gian thực.
+    if (createBookingDto.bookingType === BookingType.BOARDING) {
+      if (!createBookingDto.expectedCheckInDate) {
+        throw new BadRequestException(
+          'Đơn lưu trú bắt buộc phải có ngày giờ nhận thú cưng (expectedCheckInDate)',
+        );
+      }
+      if (!createBookingDto.expectedCheckOutDate) {
+        throw new BadRequestException(
+          'Đơn lưu trú bắt buộc phải có ngày giờ trả thú cưng (expectedCheckOutDate)',
+        );
+      }
+    }
+
+    // Kiểm tra ngày giờ dự kiến (nếu có cả 2 trường)
     if (
       createBookingDto.expectedCheckInDate &&
       createBookingDto.expectedCheckOutDate
@@ -226,36 +302,8 @@ export class BookingsService {
 
     let userServices: any[] = [];
     if (hasServiceIds) {
-      // Loại bỏ ID trùng lặp nếu có
-      const uniqueServiceIds = Array.from(new Set(createBookingDto.serviceIds));
-
-      const foundServices = await this.prisma.service.findMany({
-        where: {
-          id: { in: uniqueServiceIds },
-          isDelete: false,
-        },
-      });
-
-      if (foundServices.length !== uniqueServiceIds.length) {
-        const foundIds = new Set(foundServices.map((s) => s.id));
-        const missingIds = uniqueServiceIds.filter((id) => !foundIds.has(id));
-        throw new BadRequestException(
-          `Dịch vụ với ID [${missingIds.join(', ')}] không tồn tại hoặc đã bị xóa`,
-        );
-      }
-
-      // Xác thực category của từng dịch vụ
-      for (const service of foundServices) {
-        if (!ALLOWED_BOOKING_SERVICE_CATEGORIES.includes(service.category)) {
-          throw new BadRequestException(
-            `Dịch vụ "${service.name}" (category: ${service.category}) không hợp lệ khi đặt lịch. Chỉ chấp nhận các dịch vụ thuộc nhóm: ${ALLOWED_BOOKING_SERVICE_CATEGORIES.join(', ')}`,
-          );
-        }
-      }
-
-      // Giữ nguyên thứ tự mà người dùng đã chọn
-      userServices = uniqueServiceIds.map((id) =>
-        foundServices.find((s) => s.id === id)!,
+      userServices = await this.resolveUserServices(
+        createBookingDto.serviceIds!,
       );
     }
 
@@ -293,7 +341,27 @@ export class BookingsService {
       checkOutService,
     ];
 
-    // 6. Thực thi Transaction tạo Booking và các BookingService
+    // 6. Chống trùng lịch (spec mục 11, BR-01).
+    // Phải đặt ở đây vì cần `allServicesToCreate` mới tính được thời lượng đơn.
+    if (createBookingDto.expectedCheckInDate) {
+      const checkInDate = new Date(createBookingDto.expectedCheckInDate);
+
+      await this.assertSlotAvailable(checkInDate, createBookingDto.bookingType);
+
+      const newRange = getBookingTimeRange({
+        expectedCheckInDate: checkInDate,
+        expectedCheckOutDate: createBookingDto.expectedCheckOutDate
+          ? new Date(createBookingDto.expectedCheckOutDate)
+          : null,
+        bookingServices: allServicesToCreate.map((sv) => ({ service: sv })),
+      });
+
+      if (newRange) {
+        await this.assertNoPetConflict(createBookingDto.petId, newRange);
+      }
+    }
+
+    // 7. Thực thi Transaction tạo Booking và các BookingService
     const result = await this.prisma.$transaction(async (tx) => {
       const booking = await tx.booking.create({
         data: {
@@ -307,6 +375,7 @@ export class BookingsService {
           expectedCheckOutDate: createBookingDto.expectedCheckOutDate
             ? new Date(createBookingDto.expectedCheckOutDate)
             : null,
+          notes: createBookingDto.notes?.trim() || null,
         },
       });
 
@@ -358,7 +427,12 @@ export class BookingsService {
       });
     });
 
-    return this.formatBookingImages(result!);
+    // Trả cùng hình dạng với GET /bookings/:id (có costBreakdown) để frontend dùng thống nhất
+    const formatted = this.formatBookingImages(result!);
+    return {
+      ...formatted,
+      costBreakdown: calculateBookingCost(formatted),
+    };
   }
 
   /**
@@ -433,17 +507,136 @@ export class BookingsService {
   }
 
   /**
-   * Cập nhật trạng thái đơn đặt lịch (Chỉ ADMIN & STAFF)
+   * BR-01 — Khung giờ phải nằm trong giờ làm việc và còn chỗ.
+   *
+   * Trước đây `getAvailability` chỉ là thông tin tham khảo cho frontend tự ẩn nút;
+   * ai gọi API trực tiếp vẫn đặt được vào khung giờ đã hết chỗ.
    */
+  private async assertSlotAvailable(
+    checkInDate: Date,
+    bookingType: BookingType,
+    excludeBookingId?: number,
+  ) {
+    const slotKey = businessTimeKey(checkInDate);
+    const availability = await this.computeSlotAvailability(
+      {
+        date: businessDateString(checkInDate),
+        bookingType,
+      },
+      excludeBookingId,
+    );
 
-  async updateStatus(
+    const slot = availability.slots.find((s) => s.time === slotKey);
+
+    if (!slot) {
+      const openSlots = availability.slots.map((s) => s.time).join(', ');
+      throw new BadRequestException(
+        `Khung giờ ${slotKey} không nằm trong giờ làm việc. Các khung giờ nhận: ${openSlots}`,
+      );
+    }
+
+    if (!slot.available) {
+      throw new BadRequestException(
+        `Khung giờ ${slotKey} ngày ${availability.date} đã hết chỗ (${slot.current}/${slot.max}). Vui lòng chọn khung giờ khác.`,
+      );
+    }
+  }
+
+  /**
+   * Spec mục 11 — Không để một thú cưng có 2 lịch hẹn trùng khung giờ.
+   * Một con thú cưng không thể vừa ở ca này vừa ở ca khác, và sẽ sinh 2 hóa đơn
+   * cho cùng một lần đến cửa hàng.
+   */
+  private async assertNoPetConflict(
+    petId: number,
+    range: TimeRange,
+    excludeBookingId?: number,
+  ) {
+    const window = conflictSearchWindow(range);
+
+    const candidates = await this.prisma.booking.findMany({
+      where: {
+        petId,
+        isDelete: false,
+        status: {
+          notIn: [
+            BookingStatus.COMPLETED,
+            BookingStatus.CANCELLED,
+            BookingStatus.NO_SHOW,
+          ],
+        },
+        expectedCheckInDate: window,
+        ...(excludeBookingId ? { id: { not: excludeBookingId } } : {}),
+      },
+      include: {
+        bookingServices: { include: { service: true } },
+      },
+    });
+
+    const clash = candidates.find((other) => {
+      const otherRange = getBookingTimeRange(other);
+      return otherRange ? rangesOverlap(range, otherRange) : false;
+    });
+
+    if (clash) {
+      throw new BadRequestException(
+        `Thú cưng này đã có lịch hẹn trùng khung giờ (đơn #${clash.id}). ` +
+          `Nếu muốn làm thêm dịch vụ, hãy thêm vào đơn đang có thay vì tạo đơn mới.`,
+      );
+    }
+  }
+
+  /**
+   * Xác thực danh sách dịch vụ do khách chọn và trả về theo đúng thứ tự đã chọn.
+   * Dùng chung cho create() và update().
+   */
+  private async resolveUserServices(serviceIds: number[]) {
+    const uniqueServiceIds = Array.from(new Set(serviceIds));
+
+    const foundServices = await this.prisma.service.findMany({
+      where: { id: { in: uniqueServiceIds }, isDelete: false },
+    });
+
+    if (foundServices.length !== uniqueServiceIds.length) {
+      const foundIds = new Set(foundServices.map((sv) => sv.id));
+      const missingIds = uniqueServiceIds.filter((id) => !foundIds.has(id));
+      throw new BadRequestException(
+        `Dịch vụ với ID [${missingIds.join(', ')}] không tồn tại hoặc đã bị xóa`,
+      );
+    }
+
+    for (const service of foundServices) {
+      if (!ALLOWED_BOOKING_SERVICE_CATEGORIES.includes(service.category)) {
+        throw new BadRequestException(
+          `Dịch vụ "${service.name}" (category: ${service.category}) không hợp lệ khi đặt lịch. Chỉ chấp nhận các dịch vụ thuộc nhóm: ${ALLOWED_BOOKING_SERVICE_CATEGORIES.join(', ')}`,
+        );
+      }
+    }
+
+    // Giữ nguyên thứ tự khách đã chọn
+    return uniqueServiceIds.map((id) => foundServices.find((sv) => sv.id === id)!);
+  }
+
+  /**
+   * Sửa đơn đặt lịch: đổi lịch hẹn, ghi chú, hoặc thay danh sách dịch vụ.
+   *
+   * - OWNER      : chỉ sửa đơn của mình và chỉ khi đơn còn PENDING.
+   * - ADMIN/STAFF: sửa được khi đơn đang PENDING hoặc CONFIRMED.
+   * - Từ CHECKED_IN trở đi thì không cho sửa nữa (thú cưng đã vào cơ sở,
+   *   các bước chăm sóc đã bắt đầu ghi mốc thời gian).
+   *
+   * Hai bước hệ thống CHECK_IN / CHECK_OUT luôn được giữ, kể cả khi thay dịch vụ.
+   */
+  async update(
     id: number,
-    updateBookingStatusDto: UpdateBookingStatusDto,
+    updateBookingDto: UpdateBookingDto,
+    currentUserId: number,
+    currentUserRole: Role,
   ) {
     const booking = await this.prisma.booking.findFirst({
-      where: {
-        id,
-        isDelete: false,
+      where: { id, isDelete: false },
+      include: {
+        bookingServices: { include: { service: true } },
       },
     });
 
@@ -451,45 +644,380 @@ export class BookingsService {
       throw new NotFoundException(`Không tìm thấy đơn đặt lịch với ID: ${id}`);
     }
 
-    const updated = await this.prisma.booking.update({
-      where: { id },
-      data: {
-        status: updateBookingStatusDto.status,
+    // 1. Phân quyền + trạng thái cho phép sửa
+    if (currentUserRole === Role.OWNER) {
+      if (booking.userId !== currentUserId) {
+        throw new ForbiddenException(
+          'Bạn không có quyền sửa đơn đặt lịch này',
+        );
+      }
+      if (booking.status !== BookingStatus.PENDING) {
+        throw new ForbiddenException(
+          `Chỉ có thể sửa đơn khi đang ở trạng thái "${BOOKING_STATUS_LABELS[BookingStatus.PENDING]}". Vui lòng liên hệ cửa hàng để được hỗ trợ.`,
+        );
+      }
+    } else if (
+      booking.status !== BookingStatus.PENDING &&
+      booking.status !== BookingStatus.CONFIRMED
+    ) {
+      throw new BadRequestException(
+        `Không thể sửa đơn đã ở trạng thái "${BOOKING_STATUS_LABELS[booking.status]}"`,
+      );
+    }
+
+    // 2. Ngày giờ: hợp nhất giá trị mới với giá trị đang có rồi mới validate
+    const nextCheckIn =
+      updateBookingDto.expectedCheckInDate !== undefined
+        ? new Date(updateBookingDto.expectedCheckInDate)
+        : booking.expectedCheckInDate;
+    const nextCheckOut =
+      updateBookingDto.expectedCheckOutDate !== undefined
+        ? new Date(updateBookingDto.expectedCheckOutDate)
+        : booking.expectedCheckOutDate;
+
+    if (nextCheckIn && nextCheckOut && nextCheckOut < nextCheckIn) {
+      throw new BadRequestException(
+        'Thời gian check-out dự kiến phải sau thời gian check-in dự kiến',
+      );
+    }
+
+    if (booking.bookingType === BookingType.BOARDING) {
+      if (!nextCheckIn || !nextCheckOut) {
+        throw new BadRequestException(
+          'Đơn lưu trú bắt buộc phải có cả ngày giờ nhận và ngày giờ trả thú cưng',
+        );
+      }
+    }
+
+    // 2b. Chống trùng lịch khi đổi lịch hẹn hoặc đổi dịch vụ (đổi dịch vụ làm thay đổi
+    // thời lượng của đơn GROOMING, nên cũng phải xét lại).
+    const timingChanged =
+      updateBookingDto.expectedCheckInDate !== undefined ||
+      updateBookingDto.expectedCheckOutDate !== undefined ||
+      Array.isArray(updateBookingDto.serviceIds);
+
+    // 3. Dịch vụ: nếu truyền serviceIds thì thay toàn bộ phần khách chọn
+    const wantsServiceChange = Array.isArray(updateBookingDto.serviceIds);
+
+    if (
+      wantsServiceChange &&
+      booking.bookingType === BookingType.GROOMING &&
+      updateBookingDto.serviceIds!.length === 0
+    ) {
+      throw new BadRequestException(
+        'Lịch hẹn Grooming bắt buộc phải chọn ít nhất 1 dịch vụ chăm sóc',
+      );
+    }
+
+    const newServices = wantsServiceChange
+      ? await this.resolveUserServices(updateBookingDto.serviceIds!)
+      : [];
+
+    const systemCategories: ServiceCategory[] = [
+      ServiceCategory.CHECK_IN,
+      ServiceCategory.CHECK_OUT,
+    ];
+
+    if (timingChanged && nextCheckIn) {
+      // Chỉ kiểm tra lại khung giờ khi giờ nhận thực sự đổi — đổi riêng dịch vụ
+      // thì vẫn giữ chỗ cũ của mình, không cần tranh slot lần nữa.
+      const checkInChanged =
+        updateBookingDto.expectedCheckInDate !== undefined &&
+        nextCheckIn.getTime() !== booking.expectedCheckInDate?.getTime();
+
+      if (checkInChanged) {
+        await this.assertSlotAvailable(nextCheckIn, booking.bookingType, id);
+      }
+
+      // Thời lượng mới = các bước hệ thống đang có + danh sách dịch vụ sau khi sửa
+      const systemSteps = booking.bookingServices.filter((bs) =>
+        systemCategories.includes(bs.service.category),
+      );
+      const effectiveServices = wantsServiceChange
+        ? [
+            ...systemSteps.map((bs) => ({ service: bs.service })),
+            ...newServices.map((sv) => ({ service: sv })),
+          ]
+        : booking.bookingServices.map((bs) => ({ service: bs.service }));
+
+      const nextRange = getBookingTimeRange({
+        expectedCheckInDate: nextCheckIn,
+        expectedCheckOutDate: nextCheckOut,
+        bookingServices: effectiveServices,
+      });
+
+      if (nextRange) {
+        await this.assertNoPetConflict(booking.petId, nextRange, id);
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      if (wantsServiceChange) {
+        // Chỉ xóa các bước do khách chọn, giữ lại CHECK_IN / CHECK_OUT
+        await tx.bookingService.deleteMany({
+          where: {
+            bookingId: id,
+            service: { category: { notIn: systemCategories } },
+          },
+        });
+
+        if (newServices.length > 0) {
+          await tx.bookingService.createMany({
+            data: newServices.map((service) => ({
+              bookingId: id,
+              serviceId: service.id,
+              price: service.basePrice,
+              status: ServiceItemStatus.PENDING,
+            })),
+          });
+        }
+      }
+
+      await tx.booking.update({
+        where: { id },
+        data: {
+          ...(updateBookingDto.expectedCheckInDate !== undefined
+            ? { expectedCheckInDate: nextCheckIn }
+            : {}),
+          ...(updateBookingDto.expectedCheckOutDate !== undefined
+            ? { expectedCheckOutDate: nextCheckOut }
+            : {}),
+          ...(updateBookingDto.notes !== undefined
+            ? { notes: updateBookingDto.notes.trim() || null }
+            : {}),
+        },
+      });
+    });
+
+    return this.findOne(id, currentUserId, currentUserRole);
+  }
+
+  /**
+   * Kiểm tra quyền + điều kiện nghiệp vụ của một lần chuyển trạng thái.
+   * Tách riêng để dễ test và để `update()` / các service khác tái sử dụng.
+   */
+  private assertStatusTransitionAllowed(
+    booking: {
+      status: BookingStatus;
+      userId: number;
+      bookingType: BookingType;
+      expectedCheckInDate: Date | null;
+      bookingServices: Array<{
+        status: ServiceItemStatus;
+        service: { category: ServiceCategory };
+      }>;
+      bookingBoardingRoom: { id: number; boardingRoomId: number } | null;
+    },
+    nextStatus: BookingStatus,
+    currentUserId: number,
+    currentUserRole: Role,
+  ) {
+    const currentStatus = booking.status;
+
+    // 1. Đơn đã ở đúng trạng thái yêu cầu
+    if (currentStatus === nextStatus) {
+      throw new BadRequestException(
+        `Đơn đặt lịch đã ở trạng thái "${BOOKING_STATUS_LABELS[nextStatus]}"`,
+      );
+    }
+
+    // 2. Kiểm tra máy trạng thái
+    const allowed = BOOKING_STATUS_TRANSITIONS[currentStatus] ?? [];
+    if (!allowed.includes(nextStatus)) {
+      throw new BadRequestException(
+        `Không thể chuyển đơn đặt lịch từ "${BOOKING_STATUS_LABELS[currentStatus]}" sang "${BOOKING_STATUS_LABELS[nextStatus]}"`,
+      );
+    }
+
+    // 3. Phân quyền
+    if (currentUserRole === Role.OWNER) {
+      if (booking.userId !== currentUserId) {
+        throw new ForbiddenException(
+          'Bạn không có quyền thay đổi trạng thái đơn đặt lịch này',
+        );
+      }
+
+      if (nextStatus !== BookingStatus.CANCELLED) {
+        throw new ForbiddenException(
+          'Chủ nuôi chỉ có thể hủy đơn đặt lịch của mình',
+        );
+      }
+
+      // BR-02: chỉ được hủy khi còn cách giờ hẹn >= CANCEL_DEADLINE_HOURS
+      if (booking.expectedCheckInDate) {
+        const hoursLeft =
+          (new Date(booking.expectedCheckInDate).getTime() - Date.now()) /
+          (1000 * 60 * 60);
+
+        if (hoursLeft < CANCEL_DEADLINE_HOURS) {
+          throw new ForbiddenException(
+            `Chỉ có thể hủy đơn trước giờ hẹn ít nhất ${CANCEL_DEADLINE_HOURS} tiếng. Vui lòng liên hệ cửa hàng để được hỗ trợ.`,
+          );
+        }
+      }
+    }
+
+    // 4. Điều kiện nghiệp vụ theo trạng thái đích
+    if (nextStatus === BookingStatus.CHECKED_IN) {
+      // BR-03: đơn BOARDING phải được gán phòng trước khi tiếp nhận
+      if (
+        booking.bookingType === BookingType.BOARDING &&
+        !booking.bookingBoardingRoom
+      ) {
+        throw new BadRequestException(
+          'Đơn lưu trú cần được gán phòng trước khi tiếp nhận thú cưng',
+        );
+      }
+    }
+
+    if (nextStatus === BookingStatus.COMPLETED) {
+      // BR-05: mọi bước chăm sóc (trừ CHECK_OUT) phải hoàn thành
+      const unfinished = booking.bookingServices.filter(
+        (bs) =>
+          bs.service.category !== ServiceCategory.CHECK_OUT &&
+          bs.status !== ServiceItemStatus.COMPLETED,
+      );
+
+      if (unfinished.length > 0) {
+        throw new BadRequestException(
+          `Còn ${unfinished.length} bước chăm sóc chưa hoàn thành. Vui lòng hoàn tất tất cả các bước trước khi kết thúc đơn.`,
+        );
+      }
+    }
+  }
+
+  /**
+   * Cập nhật trạng thái đơn đặt lịch theo máy trạng thái (BR-02 → BR-05).
+   *
+   * - ADMIN / STAFF: thực hiện mọi chuyển trạng thái hợp lệ.
+   * - OWNER: chỉ được hủy đơn của chính mình và chỉ khi còn >= 12 tiếng tới giờ hẹn.
+   *
+   * Các tác động phụ được thực hiện trong cùng một transaction:
+   * - CHECKED_IN : đánh dấu bước CHECK_IN hoàn thành (mốc giờ nhận thú cưng);
+   *                đơn BOARDING -> phòng chuyển sang OCCUPIED.
+   * - COMPLETED  : đánh dấu bước CHECK_OUT hoàn thành (mốc giờ trả thú cưng);
+   *                chốt `totalAmount`; trả phòng về AVAILABLE.
+   * - CANCELLED  : lưu lý do + thời điểm hủy; trả phòng về AVAILABLE.
+   */
+  async updateStatus(
+    id: number,
+    updateBookingStatusDto: UpdateBookingStatusDto,
+    currentUserId: number,
+    currentUserRole: Role,
+  ) {
+    const booking = await this.prisma.booking.findFirst({
+      where: {
+        id,
+        isDelete: false,
       },
       include: {
-        user: {
-          select: {
-            id: true,
-            fullName: true,
-            email: true,
-            phoneNumber: true,
-          },
-        },
-        pet: true,
         bookingServices: {
           include: {
             service: true,
-            staff: {
-              select: {
-                id: true,
-                fullName: true,
-                email: true,
-              },
-            },
-          },
-          orderBy: {
-            id: 'asc',
           },
         },
-        bookingBoardingRoom: {
-          include: {
-            boardingRoom: true,
-          },
-        },
+        bookingBoardingRoom: true,
       },
     });
 
-    return this.formatBookingImages(updated);
+    if (!booking) {
+      throw new NotFoundException(`Không tìm thấy đơn đặt lịch với ID: ${id}`);
+    }
+
+    const nextStatus = updateBookingStatusDto.status;
+
+    this.assertStatusTransitionAllowed(
+      booking,
+      nextStatus,
+      currentUserId,
+      currentUserRole,
+    );
+
+    const now = new Date();
+
+    const checkInItem = booking.bookingServices.find(
+      (bs) => bs.service.category === ServiceCategory.CHECK_IN,
+    );
+    const checkOutItem = booking.bookingServices.find(
+      (bs) => bs.service.category === ServiceCategory.CHECK_OUT,
+    );
+
+    const bookingData: Prisma.BookingUpdateInput = { status: nextStatus };
+
+    await this.prisma.$transaction(async (tx) => {
+      // --- CHECKED_IN: ghi mốc tiếp nhận + khóa phòng ---
+      if (nextStatus === BookingStatus.CHECKED_IN) {
+        if (checkInItem) {
+          await tx.bookingService.update({
+            where: { id: checkInItem.id },
+            data: {
+              status: ServiceItemStatus.COMPLETED,
+              actualStartTime: checkInItem.actualStartTime ?? now,
+              actualEndTime: checkInItem.actualEndTime ?? now,
+            },
+          });
+        }
+
+        if (booking.bookingBoardingRoom) {
+          await tx.boardingRoom.update({
+            where: { id: booking.bookingBoardingRoom.boardingRoomId },
+            data: { status: RoomStatus.OCCUPIED },
+          });
+        }
+      }
+
+      // --- COMPLETED: ghi mốc trả thú cưng, chốt tiền, trả phòng ---
+      if (nextStatus === BookingStatus.COMPLETED) {
+        if (checkOutItem) {
+          await tx.bookingService.update({
+            where: { id: checkOutItem.id },
+            data: {
+              status: ServiceItemStatus.COMPLETED,
+              actualStartTime: checkOutItem.actualStartTime ?? now,
+              actualEndTime: now,
+            },
+          });
+        }
+
+        // Chốt tổng tiền dựa trên mốc check-out vừa ghi
+        const costBreakdown = calculateBookingCost({
+          ...booking,
+          bookingServices: booking.bookingServices.map((bs) =>
+            bs.id === checkOutItem?.id ? { ...bs, actualEndTime: now } : bs,
+          ),
+        });
+        bookingData.totalAmount = costBreakdown.totalAmount;
+
+        if (booking.bookingBoardingRoom) {
+          await tx.boardingRoom.update({
+            where: { id: booking.bookingBoardingRoom.boardingRoomId },
+            data: { status: RoomStatus.AVAILABLE },
+          });
+        }
+      }
+
+      // --- CANCELLED: lưu lý do + trả phòng ---
+      if (nextStatus === BookingStatus.CANCELLED) {
+        bookingData.cancelReason =
+          updateBookingStatusDto.cancelReason?.trim() || null;
+        bookingData.cancelledAt = now;
+
+        if (booking.bookingBoardingRoom) {
+          await tx.boardingRoom.update({
+            where: { id: booking.bookingBoardingRoom.boardingRoomId },
+            data: { status: RoomStatus.AVAILABLE },
+          });
+        }
+      }
+
+      await tx.booking.update({
+        where: { id },
+        data: bookingData,
+      });
+    });
+
+    // Trả về đơn đã cập nhật đầy đủ quan hệ + costBreakdown (giống GET /bookings/:id)
+    return this.findOne(id, currentUserId, currentUserRole);
   }
 
   /**
@@ -502,6 +1030,9 @@ export class BookingsService {
       where: {
         id,
         isDelete: false,
+      },
+      include: {
+        bookingBoardingRoom: true,
       },
     });
 
@@ -523,11 +1054,26 @@ export class BookingsService {
       }
     }
 
-    await this.prisma.booking.update({
-      where: { id },
-      data: {
-        isDelete: true,
-      },
+    // Nếu đơn đang giữ phòng thì phải nhả phòng, nếu không phòng sẽ kẹt
+    // OCCUPIED vĩnh viễn: đơn đã isDelete nên không còn chỗ nào trả nó về AVAILABLE.
+    const petWasStaying =
+      booking.status === BookingStatus.CHECKED_IN ||
+      booking.status === BookingStatus.IN_PROGRESS;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.booking.update({
+        where: { id },
+        data: {
+          isDelete: true,
+        },
+      });
+
+      if (booking.bookingBoardingRoom && petWasStaying) {
+        await tx.boardingRoom.update({
+          where: { id: booking.bookingBoardingRoom.boardingRoomId },
+          data: { status: RoomStatus.AVAILABLE },
+        });
+      }
     });
 
     return {
@@ -553,6 +1099,10 @@ export class BookingsService {
       petId,
       userId,
       search,
+      staffId,
+      from,
+      to,
+      paymentStatus,
     } = query;
     const skip = (page - 1) * limit;
 
@@ -578,6 +1128,29 @@ export class BookingsService {
 
     if (petId) {
       where.petId = petId;
+    }
+
+    if (staffId) {
+      where.bookingServices = {
+        some: {
+          staffId: staffId,
+        },
+      };
+    }
+
+    if (paymentStatus) {
+      where.paymentStatus = paymentStatus;
+    }
+
+    // Lọc theo khoảng ngày hẹn (expectedCheckInDate)
+    const fromDate = parseBusinessRangeBoundary(from, 'start');
+    const toDate = parseBusinessRangeBoundary(to, 'end');
+
+    if (fromDate || toDate) {
+      where.expectedCheckInDate = {
+        ...(fromDate ? { gte: fromDate } : {}),
+        ...(toDate ? { lte: toDate } : {}),
+      };
     }
 
     // Tìm kiếm theo tên thú cưng, tên/SĐT/email khách hàng
@@ -651,7 +1224,13 @@ export class BookingsService {
     ]);
 
     return {
-      data: data.map((booking) => this.formatBookingImages(booking)),
+      data: data.map((booking) => {
+        const formatted = this.formatBookingImages(booking);
+        return {
+          ...formatted,
+          costBreakdown: calculateBookingCost(formatted),
+        };
+      }),
       meta: {
         total,
         page,
@@ -666,6 +1245,18 @@ export class BookingsService {
    * Đếm số booking trên mỗi khung giờ 30 phút, so với capacity tối đa.
    */
   async getAvailability(query: QueryAvailabilityDto) {
+    return this.computeSlotAvailability(query);
+  }
+
+  /**
+   * Tính số chỗ còn lại của từng khung giờ trong ngày.
+   * @param excludeBookingId bỏ qua đơn này khi đếm — cần khi đang đổi lịch cho
+   *   chính nó, nếu không đơn sẽ tự chiếm chỗ của mình và báo hết chỗ.
+   */
+  private async computeSlotAvailability(
+    query: QueryAvailabilityDto,
+    excludeBookingId?: number,
+  ) {
     const activeStaffCount = await this.prisma.user.count({
       where: { role: Role.STAFF, isDelete: false },
     });
@@ -677,8 +1268,9 @@ export class BookingsService {
       '15:00', '15:30', '16:00', '16:30',
     ];
 
-    const dateStart = new Date(`${query.date}T00:00:00`);
-    const dateEnd = new Date(`${query.date}T23:59:59`);
+    // Ranh giới ngày tính theo giờ cửa hàng (UTC+7), không theo TZ của server
+    const dateStart = businessDayStart(query.date);
+    const dateEnd = businessDayEnd(query.date);
 
     const where: Prisma.BookingWhereInput = {
       isDelete: false,
@@ -687,9 +1279,13 @@ export class BookingsService {
         lte: dateEnd,
       },
       status: {
-        notIn: [BookingStatus.CANCELLED],
+        notIn: [BookingStatus.CANCELLED, BookingStatus.NO_SHOW],
       },
     };
+
+    if (excludeBookingId) {
+      where.id = { not: excludeBookingId };
+    }
 
     if (query.bookingType) {
       where.bookingType = query.bookingType;
@@ -709,9 +1305,8 @@ export class BookingsService {
 
     for (const booking of bookings) {
       if (!booking.expectedCheckInDate) continue;
-      const hours = String(booking.expectedCheckInDate.getHours()).padStart(2, '0');
-      const minutes = String(booking.expectedCheckInDate.getMinutes()).padStart(2, '0');
-      const timeKey = `${hours}:${minutes}`;
+      // Quy đổi mốc UTC trong DB về khung giờ hiển thị cho khách (giờ VN)
+      const timeKey = businessTimeKey(booking.expectedCheckInDate);
       if (slotCounts.has(timeKey)) {
         slotCounts.set(timeKey, slotCounts.get(timeKey)! + 1);
       }

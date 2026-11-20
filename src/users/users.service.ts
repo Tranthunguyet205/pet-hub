@@ -103,6 +103,27 @@ export class UsersService {
   }
 
   /**
+   * Danh sách nhân viên (role = STAFF) ở dạng gọn, dùng cho các ô chọn
+   * "phân công nhân viên" ở màn hình booking. Không phân trang.
+   */
+  async findStaffList() {
+    const staffs = await this.prisma.user.findMany({
+      where: { role: Role.STAFF, isDelete: false },
+      select: {
+        id: true,
+        fullName: true,
+        email: true,
+        phoneNumber: true,
+        avatarUrl: true,
+        specialty: true,
+      },
+      orderBy: { fullName: 'asc' },
+    });
+
+    return staffs.map((staff) => this.formatUserAvatar(staff));
+  }
+
+  /**
    * Lấy danh sách người dùng có phân trang, tìm kiếm và lọc (Dành cho ADMIN)
    */
   async findAll(query: QueryUserDto) {

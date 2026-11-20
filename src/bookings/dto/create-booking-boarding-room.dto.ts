@@ -14,7 +14,7 @@ export class CreateBookingBoardingRoomDto {
 
   @ApiProperty({
     description:
-      'ID của phòng lưu trú (BoardingRoom). Đơn giá theo giờ (pricePerHour) sẽ tự động lấy từ phòng này.',
+      'ID của phòng lưu trú (BoardingRoom). Đơn giá theo đêm (pricePerNight) sẽ tự động lấy từ phòng này.',
     example: 1,
   })
   @Type(() => Number)

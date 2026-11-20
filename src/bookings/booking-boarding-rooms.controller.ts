@@ -33,7 +33,7 @@ export class BookingBoardingRoomsController {
   @ApiOperation({
     summary: 'Gán phòng lưu trú vào đơn đặt lịch (Admin & Staff Only)',
     description:
-      'Chỉ ADMIN và STAFF có quyền gán phòng. 1 Booking chỉ được gán tối đa 1 phòng. Bắt buộc bookingType phải là BOARDING. Đơn giá theo giờ (pricePerHour) được tự động lấy từ phòng lưu trú ra (không cần truyền). Chặn nếu phòng đang bận ở đơn khác chưa kết thúc.',
+      'Chỉ ADMIN và STAFF có quyền gán phòng. 1 Booking chỉ được gán tối đa 1 phòng. Bắt buộc bookingType phải là BOARDING. Đơn giá theo đêm (pricePerNight) được tự động lấy từ phòng lưu trú ra (không cần truyền). Chặn nếu phòng đang bận ở đơn khác chưa kết thúc.',
   })
   @ApiResponse({
     status: 201,
@@ -72,7 +72,7 @@ export class BookingBoardingRoomsController {
   @ApiOperation({
     summary: 'Cập nhật đơn giá phòng lưu trú (Admin & Staff Only)',
     description:
-      'Chỉ cho phép cập nhật đơn giá lưu trú theo giờ (pricePerHour). Không cho phép đổi phòng sang phòng khác.',
+      'Chỉ cho phép cập nhật đơn giá lưu trú theo đêm (pricePerNight). Không cho phép đổi phòng sang phòng khác.',
   })
   @ApiResponse({
     status: 200,

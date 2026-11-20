@@ -50,7 +50,7 @@ export class BoardingRoomsService {
       data: {
         name: trimmedName,
         description: createDto.description.trim(),
-        pricePerHour: createDto.pricePerHour,
+        pricePerNight: createDto.pricePerNight,
         status: createDto.status ?? RoomStatus.AVAILABLE,
         imageUrl,
       },
@@ -63,6 +63,35 @@ export class BoardingRoomsService {
    * GET /api/boarding-rooms
    * Lấy danh sách phòng lưu trú có phân trang, lọc theo status và tìm kiếm
    */
+  /**
+   * Khoảng giá phòng lưu trú, dùng cho form đặt lịch của chủ nuôi.
+   *
+   * Lúc đặt, khách chưa biết sẽ được xếp phòng nào (cửa hàng xếp khi xác nhận đơn),
+   * nên không thể hiện con số chính xác. Endpoint này chỉ trả min/max để form
+   * ước lượng, KHÔNG trả danh sách phòng — chủ nuôi không cần biết tình trạng
+   * lấp đầy nội bộ của cửa hàng.
+   *
+   * Bỏ qua phòng đang bảo trì vì chúng không thể được xếp cho đơn mới.
+   */
+  async getPriceRange() {
+    const result = await this.prisma.boardingRoom.aggregate({
+      where: {
+        isDelete: false,
+        status: { not: RoomStatus.MAINTENANCE },
+      },
+      _min: { pricePerNight: true },
+      _max: { pricePerNight: true },
+      _count: true,
+    });
+
+    return {
+      min: result._min.pricePerNight ?? 0,
+      max: result._max.pricePerNight ?? 0,
+      roomCount: result._count,
+      unit: 'NIGHT' as const,
+    };
+  }
+
   async findAll(query: QueryBoardingRoomDto) {
     const page = query.page && query.page > 0 ? query.page : 1;
     const limit = query.limit && query.limit > 0 ? query.limit : 10;
@@ -74,6 +103,27 @@ export class BoardingRoomsService {
 
     if (query.status) {
       where.status = query.status;
+    }
+
+    // Chỉ lấy phòng gán được cho đơn lưu trú mới.
+    // Điều kiện phải khớp đúng ràng buộc của POST /booking-boarding-rooms,
+    // nếu không UI sẽ hiện phòng rồi gán vào lại bị 400.
+    if (query.assignable === 'true') {
+      where.status = { not: RoomStatus.MAINTENANCE };
+      where.bookingBoardingRooms = {
+        none: {
+          booking: {
+            isDelete: false,
+            status: {
+              notIn: [
+                BookingStatus.COMPLETED,
+                BookingStatus.CANCELLED,
+                BookingStatus.NO_SHOW,
+              ],
+            },
+          },
+        },
+      };
     }
 
     if (query.search && query.search.trim()) {
@@ -172,8 +222,8 @@ export class BoardingRoomsService {
       updateData.description = updateDto.description.trim();
     }
 
-    if (updateDto.pricePerHour !== undefined) {
-      updateData.pricePerHour = updateDto.pricePerHour;
+    if (updateDto.pricePerNight !== undefined) {
+      updateData.pricePerNight = updateDto.pricePerNight;
     }
 
     if (updateDto.status !== undefined) {

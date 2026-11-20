@@ -27,14 +27,14 @@ export class UpdateBoardingRoomDto {
   description?: string;
 
   @ApiPropertyOptional({
-    description: 'Đơn giá lưu trú theo giờ mới (VNĐ/giờ)',
+    description: 'Đơn giá lưu trú theo đêm mới (VNĐ/đêm)',
     example: 65000,
   })
   @IsOptional()
   @Type(() => Number)
-  @IsInt({ message: 'pricePerHour phải là số nguyên' })
-  @Min(0, { message: 'pricePerHour không được âm' })
-  pricePerHour?: number;
+  @IsInt({ message: 'pricePerNight phải là số nguyên' })
+  @Min(0, { message: 'pricePerNight không được âm' })
+  pricePerNight?: number;
 
   @ApiPropertyOptional({
     description: 'Trạng thái hoạt động của phòng',

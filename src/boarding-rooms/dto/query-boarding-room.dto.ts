@@ -1,5 +1,12 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { IsEnum, IsInt, IsOptional, IsString, Min } from 'class-validator';
+import {
+  IsBooleanString,
+  IsEnum,
+  IsInt,
+  IsOptional,
+  IsString,
+  Min,
+} from 'class-validator';
 import { Type } from 'class-transformer';
 import { RoomStatus } from '@prisma/client';
 
@@ -44,4 +51,16 @@ export class QueryBoardingRoomDto {
     message: 'status phải là một trong các giá trị: AVAILABLE, OCCUPIED, MAINTENANCE',
   })
   status?: RoomStatus;
+
+  @ApiPropertyOptional({
+    description:
+      'Chỉ trả về các phòng THỰC SỰ gán được cho một đơn lưu trú mới: không đang bảo trì ' +
+      'và không thuộc đơn nào chưa kết thúc. Khác với status=AVAILABLE — một phòng đã được ' +
+      'giữ bởi đơn CONFIRMED vẫn mang status AVAILABLE (vì chỉ chuyển OCCUPIED lúc check-in) ' +
+      'nhưng không gán được cho đơn khác.',
+    example: 'true',
+  })
+  @IsOptional()
+  @IsBooleanString({ message: 'assignable phải là "true" hoặc "false"' })
+  assignable?: string;
 }

@@ -198,6 +198,31 @@ export class UsersController {
   }
 
   /**
+   * GET /api/users/staff
+   * Danh sách nhân viên gọn nhẹ để phân công booking (ADMIN & STAFF)
+   */
+  @Get('staff')
+  @UseGuards(RolesGuard)
+  @Roles(Role.ADMIN, Role.STAFF)
+  @ApiOperation({
+    summary: 'Danh sách nhân viên (Admin & Staff)',
+    description:
+      'Trả về toàn bộ nhân viên đang hoạt động (role = STAFF) ở dạng rút gọn, ' +
+      'dùng cho ô chọn phân công nhân viên trong màn hình đơn đặt lịch. Không phân trang.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Danh sách nhân viên.',
+  })
+  @ApiResponse({
+    status: 403,
+    description: 'Không đủ quyền truy cập (Yêu cầu Role ADMIN hoặc STAFF).',
+  })
+  getStaffList() {
+    return this.usersService.findStaffList();
+  }
+
+  /**
    * GET /api/users
    * Lấy danh sách người dùng có phân trang & lọc (Chỉ ADMIN)
    */

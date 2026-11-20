@@ -6,6 +6,8 @@ import {
   IsDateString,
   IsInt,
   IsArray,
+  IsString,
+  MaxLength,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { BookingType } from '@prisma/client';
@@ -86,4 +88,14 @@ export class CreateBookingDto {
   @IsArray({ message: 'serviceIds phải là một danh sách' })
   @IsInt({ each: true, message: 'Mỗi phần tử trong serviceIds phải là số nguyên' })
   serviceIds?: number[];
+
+  @ApiPropertyOptional({
+    description: 'Ghi chú của chủ nuôi cho đơn đặt lịch',
+    example: 'Bé hơi sợ máy sấy, nhờ sấy nhẹ tay giúp em.',
+    maxLength: 1000,
+  })
+  @IsOptional()
+  @IsString({ message: 'notes phải là chuỗi ký tự' })
+  @MaxLength(1000, { message: 'notes không được vượt quá 1000 ký tự' })
+  notes?: string;
 }

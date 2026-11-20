@@ -2,7 +2,7 @@ import { Injectable, NotFoundException, BadRequestException } from '@nestjs/comm
 import { PrismaService } from '../prisma/prisma.service';
 import { CreateBookingBoardingRoomDto } from './dto/create-booking-boarding-room.dto';
 import { UpdateBookingBoardingRoomDto } from './dto/update-booking-boarding-room.dto';
-import { BookingStatus, BookingType } from '@prisma/client';
+import { BookingStatus, BookingType, RoomStatus } from '@prisma/client';
 
 @Injectable()
 export class BookingBoardingRoomsService {
@@ -54,14 +54,26 @@ export class BookingBoardingRoomsService {
       );
     }
 
-    // 5. Kiểm tra phòng đã được gán vào đơn booking khác đang hoạt động hay chưa (status khác COMPLETED và CANCELLED)
+    // 4b. Phòng đang bảo trì thì không gán được
+    if (room.status === RoomStatus.MAINTENANCE) {
+      throw new BadRequestException(
+        `Phòng lưu trú "${room.name}" đang bảo trì, không thể gán cho đơn đặt lịch.`,
+      );
+    }
+
+    // 5. Kiểm tra phòng đã được gán vào đơn booking khác đang hoạt động hay chưa
+    // (đơn đã COMPLETED / CANCELLED / NO_SHOW thì coi như đã trả phòng)
     const conflict = await this.prisma.bookingBoardingRoom.findFirst({
       where: {
         boardingRoomId: createDto.boardingRoomId,
         booking: {
           isDelete: false,
           status: {
-            notIn: [BookingStatus.COMPLETED, BookingStatus.CANCELLED],
+            notIn: [
+              BookingStatus.COMPLETED,
+              BookingStatus.CANCELLED,
+              BookingStatus.NO_SHOW,
+            ],
           },
         },
       },
@@ -76,15 +88,15 @@ export class BookingBoardingRoomsService {
       );
     }
 
-    // 6. Đơn giá lưu trú theo giờ (pricePerHour) luôn lấy trực tiếp từ BoardingRoom
-    const pricePerHour = room.pricePerHour;
+    // 6. Đơn giá lưu trú theo đêm (pricePerNight) luôn lấy trực tiếp từ BoardingRoom
+    const pricePerNight = room.pricePerNight;
 
     // 7. Tạo bản ghi BookingBoardingRoom
     const created = await this.prisma.bookingBoardingRoom.create({
       data: {
         bookingId: createDto.bookingId,
         boardingRoomId: createDto.boardingRoomId,
-        pricePerHour,
+        pricePerNight,
       },
       include: {
         boardingRoom: true,
@@ -103,6 +115,17 @@ export class BookingBoardingRoomsService {
         },
       },
     });
+
+    // 8. Nếu thú cưng đã vào ở rồi mới gán phòng -> khóa phòng luôn
+    if (
+      booking.status === BookingStatus.CHECKED_IN ||
+      booking.status === BookingStatus.IN_PROGRESS
+    ) {
+      await this.prisma.boardingRoom.update({
+        where: { id: room.id },
+        data: { status: RoomStatus.OCCUPIED },
+      });
+    }
 
     return created;
   }
@@ -127,14 +150,96 @@ export class BookingBoardingRoomsService {
       );
     }
 
-    const updateData: { pricePerHour?: number } = {};
+    const updateData: { pricePerNight?: number; boardingRoomId?: number } = {};
 
-    // 2. Cập nhật đơn giá lưu trú theo giờ (pricePerHour)
-    if (updateDto.pricePerHour !== undefined) {
-      updateData.pricePerHour = updateDto.pricePerHour;
+    // 2. Đổi phòng (nếu có yêu cầu)
+    let newRoom: { id: number; name: string; pricePerNight: number } | null = null;
+
+    if (
+      updateDto.boardingRoomId !== undefined &&
+      updateDto.boardingRoomId !== existing.boardingRoomId
+    ) {
+      // Đơn đã kết thúc thì không đổi phòng nữa
+      if (
+        existing.booking.status === BookingStatus.COMPLETED ||
+        existing.booking.status === BookingStatus.CANCELLED ||
+        existing.booking.status === BookingStatus.NO_SHOW
+      ) {
+        throw new BadRequestException(
+          'Không thể đổi phòng cho đơn đặt lịch đã kết thúc',
+        );
+      }
+
+      const room = await this.prisma.boardingRoom.findFirst({
+        where: { id: updateDto.boardingRoomId, isDelete: false },
+      });
+
+      if (!room) {
+        throw new NotFoundException(
+          `Không tìm thấy phòng lưu trú với ID: ${updateDto.boardingRoomId}`,
+        );
+      }
+
+      if (room.status === RoomStatus.MAINTENANCE) {
+        throw new BadRequestException(
+          `Phòng lưu trú "${room.name}" đang bảo trì, không thể gán cho đơn đặt lịch.`,
+        );
+      }
+
+      // Phòng mới không được đang thuộc một đơn khác còn hoạt động
+      const conflict = await this.prisma.bookingBoardingRoom.findFirst({
+        where: {
+          boardingRoomId: updateDto.boardingRoomId,
+          id: { not: id },
+          booking: {
+            isDelete: false,
+            status: {
+              notIn: [
+                BookingStatus.COMPLETED,
+                BookingStatus.CANCELLED,
+                BookingStatus.NO_SHOW,
+              ],
+            },
+          },
+        },
+        include: { booking: true },
+      });
+
+      if (conflict) {
+        throw new BadRequestException(
+          `Phòng lưu trú "${room.name}" (ID: ${room.id}) hiện đang được sử dụng bởi đơn đặt lịch ID: ${conflict.bookingId} (Trạng thái: ${conflict.booking.status}). Vui lòng chọn phòng khác.`,
+        );
+      }
+
+      newRoom = room;
+      updateData.boardingRoomId = room.id;
+      // Đơn giá mặc định lấy theo phòng mới
+      updateData.pricePerNight = room.pricePerNight;
     }
 
-    // 4. Lưu thay đổi vào DB
+    // 3. Cập nhật đơn giá lưu trú theo đêm (ưu tiên giá client truyền lên)
+    if (updateDto.pricePerNight !== undefined) {
+      updateData.pricePerNight = updateDto.pricePerNight;
+    }
+
+    // 4. Nếu thú cưng đã vào ở, chuyển trạng thái phòng cũ -> AVAILABLE, phòng mới -> OCCUPIED
+    const petIsStaying = [
+      BookingStatus.CHECKED_IN,
+      BookingStatus.IN_PROGRESS,
+    ].includes(existing.booking.status as any);
+
+    if (newRoom && petIsStaying) {
+      await this.prisma.boardingRoom.update({
+        where: { id: existing.boardingRoomId },
+        data: { status: RoomStatus.AVAILABLE },
+      });
+      await this.prisma.boardingRoom.update({
+        where: { id: newRoom.id },
+        data: { status: RoomStatus.OCCUPIED },
+      });
+    }
+
+    // 5. Lưu thay đổi vào DB
     const updated = await this.prisma.bookingBoardingRoom.update({
       where: { id },
       data: updateData,

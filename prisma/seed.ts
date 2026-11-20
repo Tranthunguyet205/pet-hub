@@ -1,4 +1,13 @@
-import { PrismaClient, Role, ServiceCategory, RoomStatus } from '@prisma/client';
+import {
+  PrismaClient,
+  Role,
+  ServiceCategory,
+  RoomStatus,
+  PetGender,
+  BookingType,
+  BookingStatus,
+  ServiceItemStatus,
+} from '@prisma/client';
 import * as bcrypt from 'bcrypt';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -249,7 +258,7 @@ async function main() {
 
   // 3. Seed 30 User Accounts (15 OWNER, 10 STAFF, 5 ADMIN)
   console.log('\n👥 Starting Users seeding (30 accounts)...');
-  const userPassword = '1234';
+  const userPassword = '123456';
   const userPasswordHash = await bcrypt.hash(userPassword, saltRounds);
 
   const seedUsers = [
@@ -326,11 +335,15 @@ async function main() {
     fs.mkdirSync(roomImagesDir, { recursive: true });
   }
 
+  // Lưu ý: KHÔNG seed phòng ở trạng thái OCCUPIED.
+  // RoomStatus.OCCUPIED phải do vòng đời booking sinh ra (khi đơn lưu trú CHECKED_IN),
+  // seed tự đặt OCCUPIED sẽ tạo ra trạng thái bất khả thi: phòng "đang có khách"
+  // mà không có đơn nào giữ nó. MAINTENANCE thì hợp lệ vì do admin chủ động đặt.
   const defaultRooms = [
     {
       name: 'Phòng VIP 01',
       description: 'Phòng VIP cao cấp với máy lạnh 24/7, đệm êm, camera giám sát trực tiếp, cửa sổ kính lấy sáng tự nhiên. Diện tích 4m², phù hợp cho chó lớn.',
-      pricePerHour: 80000,
+      pricePerNight: 400000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-vip-01.png',
       imageUrl: 'https://placehold.co/600x400/fef3c7/92400e.png?text=VIP+Room+01',
@@ -338,7 +351,7 @@ async function main() {
     {
       name: 'Phòng VIP 02',
       description: 'Phòng VIP đặc biệt có hệ thống lọc không khí, đèn ngủ LED, nhạc thư giãn tự động. Diện tích 5m², phù hợp cho chó lớn hoặc 2 bé nhỏ.',
-      pricePerHour: 100000,
+      pricePerNight: 500000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-vip-02.png',
       imageUrl: 'https://placehold.co/600x400/fde68a/78350f.png?text=VIP+Room+02',
@@ -346,7 +359,7 @@ async function main() {
     {
       name: 'Phòng Standard 01',
       description: 'Phòng tiêu chuẩn sạch sẽ, quạt thông gió, nệm mềm. Diện tích 2.5m², phù hợp cho chó và mèo cỡ vừa.',
-      pricePerHour: 40000,
+      pricePerNight: 200000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-standard-01.png',
       imageUrl: 'https://placehold.co/600x400/dbeafe/1e40af.png?text=Standard+01',
@@ -354,15 +367,15 @@ async function main() {
     {
       name: 'Phòng Standard 02',
       description: 'Phòng tiêu chuẩn thoáng mát, có cửa lưới chống muỗi, khay vệ sinh tự động. Diện tích 2.5m².',
-      pricePerHour: 40000,
-      status: RoomStatus.OCCUPIED,
+      pricePerNight: 200000,
+      status: RoomStatus.AVAILABLE,
       imageFile: 'room-standard-02.png',
       imageUrl: 'https://placehold.co/600x400/bfdbfe/1e3a8a.png?text=Standard+02',
     },
     {
       name: 'Phòng Standard 03',
       description: 'Phòng tiêu chuẩn với thiết kế mở, ánh sáng tự nhiên, nền sạch dễ vệ sinh. Phù hợp cho mèo.',
-      pricePerHour: 35000,
+      pricePerNight: 180000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-standard-03.png',
       imageUrl: 'https://placehold.co/600x400/c7d2fe/3730a3.png?text=Standard+03',
@@ -370,7 +383,7 @@ async function main() {
     {
       name: 'Chuồng lớn A1',
       description: 'Chuồng rộng inox cao cấp, dành cho chó lớn trên 20kg. Có khay ăn uống tự động, nệm chống thấm.',
-      pricePerHour: 50000,
+      pricePerNight: 250000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-large-a1.png',
       imageUrl: 'https://placehold.co/600x400/d1fae5/065f46.png?text=Large+Kennel+A1',
@@ -378,15 +391,15 @@ async function main() {
     {
       name: 'Chuồng lớn A2',
       description: 'Chuồng rộng cho chó lớn, vị trí yên tĩnh cuối dãy, ít bị quấy rầy. Có quạt riêng.',
-      pricePerHour: 50000,
-      status: RoomStatus.OCCUPIED,
+      pricePerNight: 250000,
+      status: RoomStatus.AVAILABLE,
       imageFile: 'room-large-a2.png',
       imageUrl: 'https://placehold.co/600x400/a7f3d0/047857.png?text=Large+Kennel+A2',
     },
     {
       name: 'Chuồng mèo M1',
       description: 'Chuồng thiết kế nhiều tầng dành riêng cho mèo, có cầu thang leo, võng treo và đồ chơi. Diện tích 1.5m².',
-      pricePerHour: 30000,
+      pricePerNight: 150000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-cat-m1.png',
       imageUrl: 'https://placehold.co/600x400/fce7f3/9d174d.png?text=Cat+Room+M1',
@@ -394,7 +407,7 @@ async function main() {
     {
       name: 'Chuồng mèo M2',
       description: 'Chuồng mèo ấm cúng với hộp ngủ kín, bàn cào móng và cửa sổ nhìn ra khu vui chơi.',
-      pricePerHour: 30000,
+      pricePerNight: 150000,
       status: RoomStatus.MAINTENANCE,
       imageFile: 'room-cat-m2.png',
       imageUrl: 'https://placehold.co/600x400/fbcfe8/831843.png?text=Cat+Room+M2',
@@ -402,7 +415,7 @@ async function main() {
     {
       name: 'Phòng cách ly Y tế',
       description: 'Phòng cách ly đặc biệt cho thú cưng đang điều trị hoặc mới phẫu thuật. Hệ thống khử khuẩn UV, nhiệt độ kiểm soát 24/7.',
-      pricePerHour: 120000,
+      pricePerNight: 600000,
       status: RoomStatus.AVAILABLE,
       imageFile: 'room-isolation.png',
       imageUrl: 'https://placehold.co/600x400/fee2e2/991b1b.png?text=Isolation+Room',
@@ -433,14 +446,14 @@ async function main() {
         data: {
           name: room.name,
           description: room.description,
-          pricePerHour: room.pricePerHour,
+          pricePerNight: room.pricePerNight,
           status: room.status,
           imageUrl: dbImageUrl,
           isDelete: false,
         },
       });
       roomCreated++;
-      console.log(`   ➕ Created room: ${room.name} (${room.pricePerHour.toLocaleString()} VND/h - ${room.status})`);
+      console.log(`   ➕ Created room: ${room.name} (${room.pricePerNight.toLocaleString()} VND/đêm - ${room.status})`);
     } else {
       if (!existing.imageUrl) {
         const destPath = path.join(roomImagesDir, room.imageFile);
@@ -461,6 +474,317 @@ async function main() {
   }
 
   console.log(`✅ Boarding Rooms seeding completed: ${roomCreated} created, ${roomSkipped} skipped.`);
+
+  // ==========================================
+  // 5. Seed Pets (dữ liệu demo cho 3 owner đầu)
+  // ==========================================
+  console.log('\n🐶 Starting Pets seeding...');
+
+  const seedPets = [
+    { ownerEmail: 'owner1@pethub.com', name: 'Milo', species: 'Chó', breed: 'Golden Retriever', gender: PetGender.MALE, weight: 18, specialNotes: 'Rất thân thiện, thích được vuốt bụng.' },
+    { ownerEmail: 'owner1@pethub.com', name: 'Luna', species: 'Mèo', breed: 'Mèo Anh lông ngắn', gender: PetGender.FEMALE, weight: 4, allergyNotes: 'Dị ứng hải sản.' },
+    { ownerEmail: 'owner2@pethub.com', name: 'Coco', species: 'Chó', breed: 'Poodle', gender: PetGender.FEMALE, weight: 5, specialNotes: 'Hơi nhát nước, cần tắm chậm.' },
+    { ownerEmail: 'owner2@pethub.com', name: 'Bơ', species: 'Mèo', breed: 'Mèo ta', gender: PetGender.MALE, weight: 3.5 },
+    { ownerEmail: 'owner3@pethub.com', name: 'Mochi', species: 'Chó', breed: 'Corgi', gender: PetGender.MALE, weight: 12, specialNotes: 'Hay sủa khi gặp chó lạ.' },
+    { ownerEmail: 'owner3@pethub.com', name: 'Sushi', species: 'Mèo', breed: 'Ragdoll', gender: PetGender.FEMALE, weight: 5.5 },
+  ];
+
+  let petCreated = 0;
+  let petSkipped = 0;
+
+  for (const pet of seedPets) {
+    const owner = await prisma.user.findUnique({ where: { email: pet.ownerEmail } });
+    if (!owner) {
+      console.warn(`   ⚠️ Không tìm thấy owner ${pet.ownerEmail}, bỏ qua pet ${pet.name}`);
+      continue;
+    }
+
+    const existing = await prisma.pet.findFirst({
+      where: { userId: owner.id, name: pet.name, isDelete: false },
+    });
+
+    if (existing) {
+      petSkipped++;
+      console.log(`   ⏭️ Skipped existing pet: ${pet.name} (${pet.ownerEmail})`);
+      continue;
+    }
+
+    await prisma.pet.create({
+      data: {
+        userId: owner.id,
+        name: pet.name,
+        species: pet.species,
+        breed: pet.breed,
+        gender: pet.gender,
+        weight: pet.weight,
+        allergyNotes: pet.allergyNotes ?? null,
+        specialNotes: pet.specialNotes ?? null,
+      },
+    });
+    petCreated++;
+    console.log(`   ➕ Created pet: ${pet.name} (${pet.species}) cho ${pet.ownerEmail}`);
+  }
+
+  console.log(`✅ Pets seeding completed: ${petCreated} created, ${petSkipped} skipped.`);
+
+  // ==========================================
+  // 6. Seed Bookings (phủ đủ các trạng thái vòng đời)
+  // ==========================================
+  console.log('\n📅 Starting Bookings seeding...');
+
+  const HOUR = 60 * 60 * 1000;
+  const DAY = 24 * HOUR;
+
+  /** Trả về thời điểm cách hôm nay `days` ngày, tại giờ:phút chỉ định */
+  const at = (days: number, hour: number, minute = 0): Date => {
+    const d = new Date(Date.now() + days * DAY);
+    d.setHours(hour, minute, 0, 0);
+    return d;
+  };
+
+  type BookingSpec = {
+    marker: string;
+    ownerEmail: string;
+    petName: string;
+    bookingType: BookingType;
+    status: BookingStatus;
+    checkIn: Date;
+    checkOut: Date;
+    categories: ServiceCategory[];
+    roomName?: string;
+    notes?: string;
+    cancelReason?: string;
+  };
+
+  const bookingSpecs: BookingSpec[] = [
+    {
+      marker: 'g-pending',
+      ownerEmail: 'owner1@pethub.com', petName: 'Milo',
+      bookingType: BookingType.GROOMING, status: BookingStatus.PENDING,
+      checkIn: at(2, 9), checkOut: at(2, 10),
+      categories: [ServiceCategory.BATH_AND_DRY],
+      notes: 'Bé hơi sợ máy sấy, nhờ sấy nhẹ tay giúp em.',
+    },
+    {
+      marker: 'g-confirmed',
+      ownerEmail: 'owner1@pethub.com', petName: 'Luna',
+      bookingType: BookingType.GROOMING, status: BookingStatus.CONFIRMED,
+      checkIn: at(1, 10), checkOut: at(1, 11, 15),
+      categories: [ServiceCategory.HYGIENE, ServiceCategory.BATH_AND_DRY],
+    },
+    {
+      marker: 'g-checked-in',
+      ownerEmail: 'owner2@pethub.com', petName: 'Coco',
+      bookingType: BookingType.GROOMING, status: BookingStatus.CHECKED_IN,
+      checkIn: at(0, 8, 30), checkOut: at(0, 10),
+      categories: [ServiceCategory.FULL_GROOMING],
+    },
+    {
+      marker: 'g-in-progress',
+      ownerEmail: 'owner2@pethub.com', petName: 'Bơ',
+      bookingType: BookingType.GROOMING, status: BookingStatus.IN_PROGRESS,
+      checkIn: at(0, 9), checkOut: at(0, 11),
+      categories: [ServiceCategory.BATH_AND_DRY, ServiceCategory.HAIRCUT],
+    },
+    {
+      marker: 'g-completed',
+      ownerEmail: 'owner3@pethub.com', petName: 'Mochi',
+      bookingType: BookingType.GROOMING, status: BookingStatus.COMPLETED,
+      checkIn: at(-3, 9), checkOut: at(-3, 10, 30),
+      categories: [ServiceCategory.HAIRCUT, ServiceCategory.HYGIENE],
+    },
+    {
+      marker: 'g-cancelled',
+      ownerEmail: 'owner3@pethub.com', petName: 'Sushi',
+      bookingType: BookingType.GROOMING, status: BookingStatus.CANCELLED,
+      checkIn: at(4, 14), checkOut: at(4, 15),
+      categories: [ServiceCategory.BATH_AND_DRY],
+      cancelReason: 'Chủ nuôi bận đột xuất, hẹn lại tuần sau.',
+    },
+    {
+      marker: 'b-in-progress',
+      ownerEmail: 'owner1@pethub.com', petName: 'Milo',
+      bookingType: BookingType.BOARDING, status: BookingStatus.IN_PROGRESS,
+      checkIn: at(-1, 8), checkOut: at(2, 17),
+      categories: [
+        ServiceCategory.FEEDING,
+        ServiceCategory.WALKING,
+        ServiceCategory.DAILY_HEALTH_CHECK,
+      ],
+      roomName: 'Phòng VIP 01',
+      notes: 'Bé ăn 2 bữa/ngày, buổi tối cần dắt đi dạo 15 phút.',
+    },
+    {
+      marker: 'b-completed',
+      ownerEmail: 'owner2@pethub.com', petName: 'Coco',
+      bookingType: BookingType.BOARDING, status: BookingStatus.COMPLETED,
+      checkIn: at(-7, 9), checkOut: at(-5, 9),
+      categories: [ServiceCategory.FEEDING, ServiceCategory.CLEANING],
+      roomName: 'Phòng Standard 01',
+    },
+  ];
+
+  let bookingCreated = 0;
+  let bookingSkipped = 0;
+
+  for (const spec of bookingSpecs) {
+    const seedTag = `[seed:${spec.marker}]`;
+
+    const existing = await prisma.booking.findFirst({
+      where: { notes: { contains: seedTag } },
+    });
+    if (existing) {
+      bookingSkipped++;
+      console.log(`   ⏭️ Skipped existing booking: ${spec.marker}`);
+      continue;
+    }
+
+    const owner = await prisma.user.findUnique({ where: { email: spec.ownerEmail } });
+    const pet = owner
+      ? await prisma.pet.findFirst({
+          where: { userId: owner.id, name: spec.petName, isDelete: false },
+        })
+      : null;
+
+    if (!owner || !pet) {
+      console.warn(`   ⚠️ Thiếu owner/pet cho ${spec.marker}, bỏ qua.`);
+      continue;
+    }
+
+    // Dựng danh sách bước dịch vụ: CHECK_IN + các dịch vụ chọn + CHECK_OUT
+    const categories: ServiceCategory[] = [
+      ServiceCategory.CHECK_IN,
+      ...spec.categories,
+      ServiceCategory.CHECK_OUT,
+    ];
+
+    const services = await prisma.service.findMany({
+      where: { category: { in: categories }, isDelete: false },
+    });
+    const serviceByCategory = new Map(services.map((sv) => [sv.category, sv]));
+
+    const missing = categories.filter((c) => !serviceByCategory.has(c));
+    if (missing.length > 0) {
+      console.warn(`   ⚠️ Thiếu service ${missing.join(', ')} cho ${spec.marker}, bỏ qua.`);
+      continue;
+    }
+
+    const isFinished = spec.status === BookingStatus.COMPLETED;
+    const hasCheckedIn = (
+      [
+        BookingStatus.CHECKED_IN,
+        BookingStatus.IN_PROGRESS,
+        BookingStatus.COMPLETED,
+      ] as BookingStatus[]
+    ).includes(spec.status);
+
+    // Trạng thái + mốc thời gian của từng bước, suy ra từ trạng thái đơn
+    const items = categories.map((category, index) => {
+      const service = serviceByCategory.get(category)!;
+      const isCheckIn = category === ServiceCategory.CHECK_IN;
+      const isCheckOut = category === ServiceCategory.CHECK_OUT;
+      // Bước giữa đầu tiên (index 1) là bước đang được thực hiện khi đơn IN_PROGRESS
+      const isFirstMiddle = index === 1;
+
+      let itemStatus: ServiceItemStatus = ServiceItemStatus.PENDING;
+      let actualStartTime: Date | null = null;
+      let actualEndTime: Date | null = null;
+
+      if (isFinished) {
+        itemStatus = ServiceItemStatus.COMPLETED;
+        actualStartTime = isCheckOut
+          ? new Date(spec.checkOut.getTime() - 15 * 60 * 1000)
+          : new Date(spec.checkIn.getTime() + (index - 1) * 30 * 60 * 1000);
+        actualEndTime = isCheckOut
+          ? spec.checkOut
+          : new Date(actualStartTime.getTime() + 30 * 60 * 1000);
+        if (isCheckIn) {
+          actualStartTime = spec.checkIn;
+          actualEndTime = spec.checkIn;
+        }
+      } else if (isCheckIn && hasCheckedIn) {
+        itemStatus = ServiceItemStatus.COMPLETED;
+        actualStartTime = spec.checkIn;
+        actualEndTime = spec.checkIn;
+      } else if (isFirstMiddle && spec.status === BookingStatus.IN_PROGRESS) {
+        itemStatus = ServiceItemStatus.IN_PROGRESS;
+        actualStartTime = new Date(spec.checkIn.getTime() + 15 * 60 * 1000);
+      }
+
+      return {
+        serviceId: service.id,
+        price: service.basePrice,
+        status: itemStatus,
+        actualStartTime,
+        actualEndTime,
+      };
+    });
+
+    const serviceAmount = items.reduce((sum, it) => sum + it.price, 0);
+
+    // Phòng lưu trú (chỉ với đơn BOARDING)
+    const room = spec.roomName
+      ? await prisma.boardingRoom.findFirst({
+          where: { name: spec.roomName, isDelete: false },
+        })
+      : null;
+
+    let roomAmount = 0;
+    if (room) {
+      // Đếm đêm theo ngày lịch, khớp với countStayNights() ở booking-cost.util.ts
+      const inDay = new Date(spec.checkIn); inDay.setHours(0, 0, 0, 0);
+      const outDay = new Date(spec.checkOut); outDay.setHours(0, 0, 0, 0);
+      const stayNights = Math.max(
+        1,
+        Math.round((outDay.getTime() - inDay.getTime()) / DAY),
+      );
+      roomAmount = stayNights * room.pricePerNight;
+    }
+
+    const notes = [spec.notes, seedTag].filter(Boolean).join(' ');
+
+    const booking = await prisma.booking.create({
+      data: {
+        userId: owner.id,
+        petId: pet.id,
+        bookingType: spec.bookingType,
+        status: spec.status,
+        expectedCheckInDate: spec.checkIn,
+        expectedCheckOutDate: spec.checkOut,
+        notes,
+        cancelReason: spec.cancelReason ?? null,
+        cancelledAt: spec.cancelReason ? new Date() : null,
+        // Chỉ đơn đã hoàn tất mới chốt tổng tiền (giống logic updateStatus)
+        totalAmount: isFinished ? serviceAmount + roomAmount : 0,
+        bookingServices: { create: items },
+      },
+    });
+
+    if (room) {
+      await prisma.bookingBoardingRoom.create({
+        data: {
+          bookingId: booking.id,
+          boardingRoomId: room.id,
+          pricePerNight: room.pricePerNight,
+        },
+      });
+
+      // Phòng đang có khách thì khóa lại cho khớp trạng thái đơn
+      if (hasCheckedIn && !isFinished) {
+        await prisma.boardingRoom.update({
+          where: { id: room.id },
+          data: { status: RoomStatus.OCCUPIED },
+        });
+      }
+    }
+
+    bookingCreated++;
+    console.log(
+      `   ➕ Created booking #${booking.id} [${spec.bookingType}/${spec.status}] ${spec.petName} - ${spec.ownerEmail}`,
+    );
+  }
+
+  console.log(`✅ Bookings seeding completed: ${bookingCreated} created, ${bookingSkipped} skipped.`);
 }
 
 main()
