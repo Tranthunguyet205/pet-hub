@@ -479,14 +479,26 @@ async function main() {
   // 5. Seed Pets (dữ liệu demo cho 3 owner đầu)
   // ==========================================
   console.log('\n🐶 Starting Pets seeding...');
+  const petImagesDir = path.join(process.cwd(), 'files', 'petAvatars');
 
   const seedPets = [
-    { ownerEmail: 'owner1@pethub.com', name: 'Milo', species: 'Chó', breed: 'Golden Retriever', gender: PetGender.MALE, weight: 18, specialNotes: 'Rất thân thiện, thích được vuốt bụng.' },
-    { ownerEmail: 'owner1@pethub.com', name: 'Luna', species: 'Mèo', breed: 'Mèo Anh lông ngắn', gender: PetGender.FEMALE, weight: 4, allergyNotes: 'Dị ứng hải sản.' },
-    { ownerEmail: 'owner2@pethub.com', name: 'Coco', species: 'Chó', breed: 'Poodle', gender: PetGender.FEMALE, weight: 5, specialNotes: 'Hơi nhát nước, cần tắm chậm.' },
-    { ownerEmail: 'owner2@pethub.com', name: 'Bơ', species: 'Mèo', breed: 'Mèo ta', gender: PetGender.MALE, weight: 3.5 },
-    { ownerEmail: 'owner3@pethub.com', name: 'Mochi', species: 'Chó', breed: 'Corgi', gender: PetGender.MALE, weight: 12, specialNotes: 'Hay sủa khi gặp chó lạ.' },
-    { ownerEmail: 'owner3@pethub.com', name: 'Sushi', species: 'Mèo', breed: 'Ragdoll', gender: PetGender.FEMALE, weight: 5.5 },
+    { ownerEmail: 'owner1@pethub.com', name: 'Milo', species: 'Chó', breed: 'Golden Retriever', gender: PetGender.MALE, weight: 18, specialNotes: 'Rất thân thiện, thích được vuốt bụng.', imageUrl: 'https://images.dog.ceo/breeds/retriever-golden/n02099601_3004.jpg', imageFile: 'seed-pet-milo.jpg' },
+    { ownerEmail: 'owner1@pethub.com', name: 'Luna', species: 'Mèo', breed: 'Mèo Anh lông ngắn', gender: PetGender.FEMALE, weight: 4, allergyNotes: 'Dị ứng hải sản.', imageUrl: 'https://cdn2.thecatapi.com/images/6hj.jpg', imageFile: 'seed-pet-luna.jpg' },
+    { ownerEmail: 'owner2@pethub.com', name: 'Coco', species: 'Chó', breed: 'Poodle', gender: PetGender.FEMALE, weight: 5, specialNotes: 'Hơi nhát nước, cần tắm chậm.', imageUrl: 'https://images.dog.ceo/breeds/poodle-toy/n02113624_8880.jpg', imageFile: 'seed-pet-coco.jpg' },
+    { ownerEmail: 'owner2@pethub.com', name: 'Bơ', species: 'Mèo', breed: 'Mèo ta', gender: PetGender.MALE, weight: 3.5, imageUrl: 'https://cdn2.thecatapi.com/images/9sn.jpg', imageFile: 'seed-pet-bo.jpg' },
+    { ownerEmail: 'owner3@pethub.com', name: 'Mochi', species: 'Chó', breed: 'Corgi', gender: PetGender.MALE, weight: 12, specialNotes: 'Hay sủa khi gặp chó lạ.', imageUrl: 'https://images.dog.ceo/breeds/corgi-cardigan/n02113186_9000.jpg', imageFile: 'seed-pet-mochi.jpg' },
+    { ownerEmail: 'owner3@pethub.com', name: 'Sushi', species: 'Mèo', breed: 'Ragdoll', gender: PetGender.FEMALE, weight: 5.5, imageUrl: 'https://cdn2.thecatapi.com/images/cjl.jpg', imageFile: 'seed-pet-sushi.jpg' },
+    // owner4 - Phạm Thị Dung (10 pet chó/mèo)
+    { ownerEmail: 'owner4@pethub.com', name: 'Lucky', species: 'Chó', breed: 'Phốc sóc (Pomeranian)', gender: PetGender.MALE, weight: 3, specialNotes: 'Năng động, hay chạy nhảy.', imageUrl: 'https://images.dog.ceo/breeds/pomeranian/n02112018_2207.jpg', imageFile: 'seed-pet-lucky.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Kem', species: 'Mèo', breed: 'Mèo Ba Tư', gender: PetGender.FEMALE, weight: 4.2, specialNotes: 'Lông dài, cần chải hằng ngày.', imageUrl: 'https://cdn2.thecatapi.com/images/21v.jpg', imageFile: 'seed-pet-kem.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Đậu', species: 'Chó', breed: 'Chihuahua', gender: PetGender.MALE, weight: 2.5, allergyNotes: 'Dị ứng thịt gà.', imageUrl: 'https://images.dog.ceo/breeds/chihuahua/n02085620_473.jpg', imageFile: 'seed-pet-dau.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Mít', species: 'Mèo', breed: 'Mèo Xiêm', gender: PetGender.MALE, weight: 3.8, imageUrl: 'https://cdn2.thecatapi.com/images/3t6.jpg', imageFile: 'seed-pet-mit.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Na', species: 'Chó', breed: 'Shiba Inu', gender: PetGender.FEMALE, weight: 9, specialNotes: 'Không thích bị cắt móng.', imageUrl: 'https://images.dog.ceo/breeds/shiba/shiba-10.jpg', imageFile: 'seed-pet-na.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Tiêu', species: 'Mèo', breed: 'Mèo Scottish Fold', gender: PetGender.FEMALE, weight: 3.6, imageUrl: 'https://cdn2.thecatapi.com/images/ae0.jpg', imageFile: 'seed-pet-tieu.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Bắp', species: 'Chó', breed: 'Husky', gender: PetGender.MALE, weight: 22, specialNotes: 'Cần vận động nhiều, hay hú.', imageUrl: 'https://images.dog.ceo/breeds/husky/enola-vpr-01.jpg', imageFile: 'seed-pet-bap.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Gấu', species: 'Chó', breed: 'Alaska Malamute', gender: PetGender.MALE, weight: 30, allergyNotes: 'Dị ứng phấn hoa.', imageUrl: 'https://images.dog.ceo/breeds/malamute/n02110063_16713.jpg', imageFile: 'seed-pet-gau.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Mây', species: 'Mèo', breed: 'Mèo Anh lông dài', gender: PetGender.FEMALE, weight: 4.5, specialNotes: 'Nhút nhát với người lạ.', imageUrl: 'https://cdn2.thecatapi.com/images/e44.jpg', imageFile: 'seed-pet-may.jpg' },
+    { ownerEmail: 'owner4@pethub.com', name: 'Sữa', species: 'Mèo', breed: 'Mèo ta', gender: PetGender.UNKNOWN, weight: 2.8, imageUrl: 'https://cdn2.thecatapi.com/images/b7d.jpg', imageFile: 'seed-pet-sua.jpg' },
   ];
 
   let petCreated = 0;
@@ -503,11 +515,32 @@ async function main() {
       where: { userId: owner.id, name: pet.name, isDelete: false },
     });
 
+    /** Tải ảnh avatar về files/petAvatars, trả về đường dẫn lưu DB (null nếu lỗi) */
+    const downloadPetAvatar = async (): Promise<string | null> => {
+      try {
+        await downloadFile(pet.imageUrl, path.join(petImagesDir, pet.imageFile));
+        return `/files/petAvatars/${pet.imageFile}`;
+      } catch (err) {
+        console.warn(`   ⚠️ Failed to download avatar for ${pet.name}, skipping image.`);
+        return null;
+      }
+    };
+
     if (existing) {
+      // Bổ sung ảnh nếu pet seed đã có nhưng chưa có avatar
+      if (!existing.avatarUrl) {
+        const avatarUrl = await downloadPetAvatar();
+        if (avatarUrl) {
+          await prisma.pet.update({ where: { id: existing.id }, data: { avatarUrl } });
+          console.log(`   📷 Updated avatar for existing pet: ${pet.name}`);
+        }
+      }
       petSkipped++;
       console.log(`   ⏭️ Skipped existing pet: ${pet.name} (${pet.ownerEmail})`);
       continue;
     }
+
+    const avatarUrl = await downloadPetAvatar();
 
     await prisma.pet.create({
       data: {
@@ -517,6 +550,7 @@ async function main() {
         breed: pet.breed,
         gender: pet.gender,
         weight: pet.weight,
+        avatarUrl,
         allergyNotes: pet.allergyNotes ?? null,
         specialNotes: pet.specialNotes ?? null,
       },
