@@ -1,0 +1,8 @@
+# Shell script phải giữ LF: Windows checkout thành CRLF sẽ làm shebang
+# trở thành "#!/bin/sh\r", container báo "no such file or directory" dù file có thật.
+*.sh text eol=lf
+
+# Các file chạy trong container Linux, giữ LF cho chắc
+Dockerfile text eol=lf
+*.dockerfile text eol=lf
+.dockerignore text eol=lf
