@@ -18,9 +18,11 @@ COPY . .
 # Generate Prisma Client & Build NestJS application
 RUN yarn prisma:generate && yarn build
 
-# Cấp quyền thực thi cho entrypoint script
+# Cấp quyền thực thi cho entrypoint script.
+# sed bỏ \r: nếu máy Windows checkout file thành CRLF thì shebang hóa "#!/bin/sh\r",
+# container sẽ báo "no such file or directory" dù file vẫn có thật.
 COPY docker-entrypoint.sh /app/docker-entrypoint.sh
-RUN chmod +x /app/docker-entrypoint.sh
+RUN sed -i 's/\r$//' /app/docker-entrypoint.sh && chmod +x /app/docker-entrypoint.sh
 
 # Cổng mặc định của ứng dụng
 EXPOSE 3000
